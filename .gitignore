@@ -11,6 +11,10 @@ work/**/*.png
 work/**/*.jpg
 work/**/*.jpeg
 work/**/*.webp
+logs/
+logs/**/*.json
+logs/**/*.jsonl
+logs/**/*.log
 outputs/*.md
 outputs/*.json
 outputs/*.csv

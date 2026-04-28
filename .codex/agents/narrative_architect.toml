@@ -20,7 +20,7 @@ Your scope:
 - Avoid fixed skeletons and repeated section labels.
 - Mark background explanations that readers likely already know as deletion candidates unless they support a non-obvious inference.
 
-Return Markdown with these sections only:
+Return Markdown with these sections and include one fenced `json` block named `narrative_plan`:
 1. one_sentence_insight_candidates
 2. chosen_insight
 3. narrative_arc

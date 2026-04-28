@@ -48,6 +48,8 @@ class CliDryRunTests(unittest.TestCase):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
         )
+        self.copy_schema(root, "schemas/claim_ledger.schema.json")
+        self.copy_schema(root, "schemas/earnings_delta.schema.json")
         return root
 
     def write_default_outputs(
@@ -64,10 +66,12 @@ class CliDryRunTests(unittest.TestCase):
             "article.md",
             "source_ledger.csv",
             "image_ledger.csv",
+            "claim_ledger.json",
         ]:
             if missing and name in missing:
                 continue
-            (output_dir / name).write_text(name, encoding="utf-8")
+            content = "[]\n" if name == "claim_ledger.json" else name
+            (output_dir / name).write_text(content, encoding="utf-8")
 
     def write_valid_article_outputs(self, root: Path, *, run_id: str = "test_run") -> None:
         output_dir = root / "outputs" / run_id
@@ -81,6 +85,7 @@ class CliDryRunTests(unittest.TestCase):
             "image_path,inspected_status\n,not_available\n",
             encoding="utf-8",
         )
+        (output_dir / "claim_ledger.json").write_text("[]\n", encoding="utf-8")
         (output_dir / "article_result.json").write_text(
             json.dumps(
                 {
@@ -93,6 +98,9 @@ class CliDryRunTests(unittest.TestCase):
                         "article_md": f"outputs/{run_id}/article.md",
                         "source_ledger_csv": f"outputs/{run_id}/source_ledger.csv",
                         "image_ledger_csv": f"outputs/{run_id}/image_ledger.csv",
+                        "claim_ledger_json": f"outputs/{run_id}/claim_ledger.json",
+                        "preflight_result_json": f"outputs/{run_id}/preflight_result.json",
+                        "run_manifest_json": f"outputs/{run_id}/run_manifest.json",
                     },
                     "critical_warnings": [],
                     "checklist_status": "pass",
@@ -103,11 +111,151 @@ class CliDryRunTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def copy_schema(self, root: Path, rel: str) -> None:
+        source = Path(__file__).resolve().parents[1] / rel
+        target = root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def minimal_earnings_delta_payload(self) -> dict[str, object]:
+        return {
+            "delta_table": [],
+            "disappeared_highlights": [],
+            "wording_shifts": [],
+            "guidance_assumption_changes": [],
+            "ir_frame": "",
+            "counter_reading": "",
+            "scorecard_candidate": {
+                "total": 0,
+                "headline": 0,
+                "quality": 0,
+                "leading_indicators": 0,
+                "transparency": 0,
+                "execution": 0,
+                "summary": "No delta rows.",
+            },
+            "next_quarter_verification_points": [],
+        }
+
+    def write_valid_earnings_outputs(
+        self,
+        root: Path,
+        *,
+        run_id: str = "test_run",
+        delta_payload: object | str | None = None,
+    ) -> None:
+        output_dir = root / "outputs" / run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "article.md").write_text("## 한눈에 보기\n\n본문입니다.\n", encoding="utf-8")
+        (output_dir / "source_ledger.csv").write_text(
+            "source_id,url,local_path\nsrc_001,https://example.com,inputs/source.md\n",
+            encoding="utf-8",
+        )
+        (output_dir / "image_ledger.csv").write_text(
+            "image_path,inspected_status,keep_or_drop\n,not_available,drop\n",
+            encoding="utf-8",
+        )
+        (output_dir / "claim_ledger.json").write_text("[]\n", encoding="utf-8")
+        scorecard = {
+            "total": 0,
+            "headline": 0,
+            "quality": 0,
+            "leading_indicators": 0,
+            "transparency": 0,
+            "execution": 0,
+            "summary": "No scorecard rows.",
+        }
+        (output_dir / "article_result.json").write_text(
+            json.dumps(
+                {
+                    "article_type": "earnings",
+                    "title": "제목",
+                    "subtitle": "부제",
+                    "one_sentence_insight": "핵심",
+                    "scorecard": scorecard,
+                    "output_files": {
+                        "article_md": f"outputs/{run_id}/article.md",
+                        "source_ledger_csv": f"outputs/{run_id}/source_ledger.csv",
+                        "image_ledger_csv": f"outputs/{run_id}/image_ledger.csv",
+                        "claim_ledger_json": f"outputs/{run_id}/claim_ledger.json",
+                        "preflight_result_json": f"outputs/{run_id}/preflight_result.json",
+                        "run_manifest_json": f"outputs/{run_id}/run_manifest.json",
+                        "earnings_delta_matrix_json": f"outputs/{run_id}/earnings_delta_matrix.json",
+                        "earnings_delta_matrix_md": f"outputs/{run_id}/earnings_delta_matrix.md",
+                    },
+                    "critical_warnings": [],
+                    "checklist_status": "pass",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        if delta_payload is None:
+            delta_payload = self.minimal_earnings_delta_payload()
+        delta_text = delta_payload if isinstance(delta_payload, str) else json.dumps(delta_payload, ensure_ascii=False)
+        (output_dir / "earnings_delta_matrix.json").write_text(delta_text + "\n", encoding="utf-8")
+        (output_dir / "earnings_delta_matrix.md").write_text("# Earnings delta\n", encoding="utf-8")
+
     def write_config(self, root: Path, text: str, name: str = "reportmachine.toml") -> Path:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         return path
+
+    def write_complete_earnings_sources(self, root: Path) -> None:
+        input_dir = root / "inputs"
+        source_dir = root / "fixtures"
+        input_dir.mkdir(parents=True, exist_ok=True)
+        source_dir.mkdir(parents=True, exist_ok=True)
+        rows = [
+            ("cur_release", "current", "earnings_release"),
+            ("cur_deck", "current", "investor_presentation"),
+            ("prev_release", "previous", "earnings_release"),
+            ("prev_deck", "previous", "investor_presentation"),
+        ]
+        for source_id, _period_role, _doc_kind in rows:
+            (source_dir / f"{source_id}.txt").write_text(source_id, encoding="utf-8")
+        with (input_dir / "sources.csv").open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(
+                handle,
+                fieldnames=[
+                    "source_id",
+                    "article_type",
+                    "company",
+                    "period_role",
+                    "period",
+                    "doc_kind",
+                    "issuer",
+                    "date",
+                    "title",
+                    "url",
+                    "source_tier",
+                    "required",
+                    "local_path",
+                    "notes",
+                ],
+            )
+            writer.writeheader()
+            for source_id, period_role, doc_kind in rows:
+                writer.writerow(
+                    {
+                        "source_id": source_id,
+                        "article_type": "earnings",
+                        "company": "Example",
+                        "period_role": period_role,
+                        "period": "Q1",
+                        "doc_kind": doc_kind,
+                        "issuer": "Example",
+                        "date": "2026-01-01",
+                        "title": source_id,
+                        "url": "",
+                        "source_tier": "primary",
+                        "required": "true",
+                        "local_path": f"fixtures/{source_id}.txt",
+                        "notes": "",
+                    }
+                )
 
     def write_summary_schema(self, root: Path) -> None:
         schema_source = Path(__file__).resolve().parents[1] / SUMMARY_SCHEMA
@@ -771,9 +919,15 @@ web_search = "cached"
     def test_command_uses_codex_root_schema_run_outputs_and_live_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
+            self.write_complete_earnings_sources(root)
+            draft = root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
+            draft.parent.mkdir(parents=True, exist_ok=True)
+            draft.write_text("draft", encoding="utf-8")
             argv = [
                 "--mode",
                 "earnings",
+                "--phase",
+                "finalize",
                 "--run-id",
                 "test_run",
                 "--project-root",
@@ -849,6 +1003,7 @@ web_search = "cached"
     def test_rendered_ingest_images_are_passed_to_codex_image_input(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
+            self.write_complete_earnings_sources(root)
             argv = [
                 "--mode",
                 "earnings",
@@ -901,6 +1056,7 @@ web_search = "cached"
     def test_web_search_can_be_disabled_explicitly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
+            self.write_complete_earnings_sources(root)
             argv = [
                 "--mode",
                 "earnings",
@@ -998,6 +1154,9 @@ external_root = "{(root / "artifacts").as_posix()}"
                         "article_md": "outputs/test_run/article.md",
                         "source_ledger_csv": "outputs/test_run/source_ledger.csv",
                         "image_ledger_csv": "outputs/test_run/image_ledger.csv",
+                        "claim_ledger_json": "outputs/test_run/claim_ledger.json",
+                        "preflight_result_json": "outputs/test_run/preflight_result.json",
+                        "run_manifest_json": "outputs/test_run/run_manifest.json",
                     },
                     "critical_warnings": [],
                     "checklist_status": checklist_status,
@@ -1056,6 +1215,9 @@ external_root = "{(root / "artifacts").as_posix()}"
                     path = root / rel
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(rel, encoding="utf-8")
+                claim_path = root / "outputs" / "test_run" / "claim_ledger.json"
+                claim_path.parent.mkdir(parents=True, exist_ok=True)
+                claim_path.write_text("[]\n", encoding="utf-8")
                 return 0
 
             with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
@@ -1128,6 +1290,114 @@ external_root = "{(root / "artifacts").as_posix()}"
             )
             self.assertFalse((latest_dir / "article.md").exists())
 
+    def test_earnings_run_rejects_malformed_delta_json_without_refreshing_latest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            self.write_complete_earnings_sources(root)
+            self.copy_schema(root, "schemas/claim_ledger.schema.json")
+            self.copy_schema(root, "schemas/earnings_delta.schema.json")
+            latest_dir = root / "outputs" / "latest"
+            latest_dir.mkdir(parents=True)
+            (latest_dir / "article.md").write_text("stale-article", encoding="utf-8")
+
+            def fake_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_earnings_outputs(root, delta_payload="{not-json")
+                return 0
+
+            with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
+                status, output = self.run_cli(
+                    [
+                        "--mode",
+                        "earnings",
+                        "--run-id",
+                        "test_run",
+                        "--project-root",
+                        str(root),
+                    ]
+                )
+
+            self.assertEqual(status, 2)
+            self.assertIn("Post-run validation failed", output)
+            self.assertIn("invalid earnings delta JSON", output)
+            self.assertEqual(
+                (latest_dir / "article.md").read_text(encoding="utf-8"),
+                "stale-article",
+            )
+            self.assertFalse((latest_dir / "earnings_delta_matrix.json").exists())
+
+    def test_earnings_run_rejects_schema_invalid_delta_json_without_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            self.write_complete_earnings_sources(root)
+            self.copy_schema(root, "schemas/claim_ledger.schema.json")
+            self.copy_schema(root, "schemas/earnings_delta.schema.json")
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "earnings"
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+""".lstrip(),
+            )
+
+            def fake_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_earnings_outputs(root, delta_payload={})
+                return 0
+
+            with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                    ]
+                )
+
+            self.assertEqual(status, 2)
+            self.assertIn("earnings delta schema validation failed", output)
+            self.assertFalse((root / "outputs" / "latest").exists())
+            self.assertFalse((external_root / "latest").exists())
+
+    def test_earnings_run_accepts_schema_valid_delta_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            self.write_complete_earnings_sources(root)
+            self.copy_schema(root, "schemas/claim_ledger.schema.json")
+            self.copy_schema(root, "schemas/earnings_delta.schema.json")
+            delta_payload = self.minimal_earnings_delta_payload()
+
+            def fake_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_earnings_outputs(root, delta_payload=delta_payload)
+                return 0
+
+            with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
+                status, output = self.run_cli(
+                    [
+                        "--mode",
+                        "earnings",
+                        "--run-id",
+                        "test_run",
+                        "--project-root",
+                        str(root),
+                    ]
+                )
+
+            self.assertEqual(status, 0, output)
+            latest_delta = root / "outputs" / "latest" / "earnings_delta_matrix.json"
+            self.assertEqual(
+                json.loads(latest_delta.read_text(encoding="utf-8")),
+                delta_payload,
+            )
+
     def test_post_run_validator_rejects_changed_existing_untracked_file(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = self.init_git_root(temp_dir)
@@ -1176,10 +1446,11 @@ external_root = "{(root / "artifacts").as_posix()}"
                     "outputs/test_run/article.md",
                     "outputs/test_run/source_ledger.csv",
                     "outputs/test_run/image_ledger.csv",
+                    "outputs/test_run/claim_ledger.json",
                 ]:
                     path = root / rel
                     path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text(path.name, encoding="utf-8")
+                    path.write_text("[]\n" if path.suffix == ".json" else path.name, encoding="utf-8")
                 return 0
 
             with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):

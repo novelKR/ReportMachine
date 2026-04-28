@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "claim_id": {
+        "type": "string"
+      },
+      "claim_text": {
+        "type": "string"
+      },
+      "claim_type": {
+        "type": "string"
+      },
+      "article_section": {
+        "type": "string"
+      },
+      "source_ids": {
+        "type": "array",
+        "minItems": 1,
+        "items": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "source_quote_or_datapoint": {
+        "type": "string",
+        "minLength": 1
+      },
+      "confidence": {
+        "type": "string",
+        "enum": ["high", "medium", "low"]
+      },
+      "support_status": {
+        "type": "string",
+        "enum": ["supported", "unsupported", "needs_review"]
+      },
+      "needs_human_review": {
+        "type": "boolean"
+      },
+      "reason": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "claim_id",
+      "claim_text",
+      "claim_type",
+      "article_section",
+      "source_ids",
+      "source_quote_or_datapoint",
+      "confidence",
+      "support_status",
+      "needs_human_review"
+    ]
+  }
+}

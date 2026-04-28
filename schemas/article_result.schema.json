@@ -76,9 +76,31 @@
         },
         "image_ledger_csv": {
           "type": "string"
+        },
+        "claim_ledger_json": {
+          "type": "string"
+        },
+        "preflight_result_json": {
+          "type": "string"
+        },
+        "run_manifest_json": {
+          "type": "string"
+        },
+        "earnings_delta_matrix_json": {
+          "type": ["string", "null"]
+        },
+        "earnings_delta_matrix_md": {
+          "type": ["string", "null"]
         }
       },
-      "required": ["article_md", "source_ledger_csv", "image_ledger_csv"]
+      "required": [
+        "article_md",
+        "source_ledger_csv",
+        "image_ledger_csv",
+        "claim_ledger_json",
+        "preflight_result_json",
+        "run_manifest_json"
+      ]
     },
     "critical_warnings": {
       "type": "array",

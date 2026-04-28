@@ -9,32 +9,52 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "item": {
+          "metric_or_theme": {
             "type": "string"
           },
-          "prior_quarter": {
+          "previous_period_value_or_language": {
             "type": "string"
           },
-          "current_quarter": {
+          "current_period_value_or_language": {
             "type": "string"
           },
           "change_type": {
             "type": "string"
           },
-          "interpretation": {
+          "company_frame": {
             "type": "string"
           },
-          "verification_point": {
+          "counter_interpretation": {
+            "type": "string"
+          },
+          "evidence_source_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scorecard_axis": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "next_quarter_watchpoint": {
             "type": "string"
           }
         },
         "required": [
-          "item",
-          "prior_quarter",
-          "current_quarter",
+          "metric_or_theme",
+          "previous_period_value_or_language",
+          "current_period_value_or_language",
           "change_type",
-          "interpretation",
-          "verification_point"
+          "company_frame",
+          "counter_interpretation",
+          "evidence_source_ids",
+          "scorecard_axis",
+          "confidence",
+          "next_quarter_watchpoint"
         ]
       }
     },

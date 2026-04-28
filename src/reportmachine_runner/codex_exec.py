@@ -18,11 +18,17 @@ class CodexExecConfig:
     root: Path
     codex_bin: str
     run_id: str
+    phase: str
     schema: str
     output: str
     article_output: str
     source_ledger_output: str
     image_ledger_output: str
+    claim_ledger_output: str
+    preflight_result_output: str
+    run_manifest_output: str
+    earnings_delta_matrix_output: str
+    earnings_delta_matrix_md: str
     work_run_dir: str
     draft_output: str
     image_notes_dir: str
@@ -35,6 +41,10 @@ class CodexExecConfig:
     web_search: str
     allow_shell_network: bool
     image_inputs: tuple[str, ...]
+    structured_output: bool
+    json_events: bool
+    events_log: str
+    stderr_log: str
     artifact_sync: ArtifactSyncConfig
     prompt: str
 
@@ -45,12 +55,19 @@ def ensure_output_directories(config: CodexExecConfig) -> None:
         config.article_output,
         config.source_ledger_output,
         config.image_ledger_output,
+        config.claim_ledger_output,
+        config.preflight_result_output,
+        config.run_manifest_output,
+        config.earnings_delta_matrix_output,
+        config.earnings_delta_matrix_md,
         config.draft_output,
         config.image_ledger_candidate,
         config.source_ingest_manifest,
         config.source_candidate_ledger,
         config.pdf_index,
         config.rendered_images_ledger,
+        config.events_log,
+        config.stderr_log,
     ]:
         resolve_under_root(config.root, value).parent.mkdir(parents=True, exist_ok=True)
     work_run_dir = resolve_under_root(config.root, config.work_run_dir)
@@ -67,15 +84,22 @@ def build_command(config: CodexExecConfig) -> list[str]:
         "-C",
         str(config.root),
         "--skip-git-repo-check",
-        "--output-schema",
-        config.schema,
-        "-o",
-        config.output,
         "-c",
         'project_root_markers=[".git",".article-root"]',
         "-c",
         f'web_search="{config.web_search}"',
     ]
+    if config.json_events:
+        command.append("--json")
+    if config.structured_output:
+        command.extend(
+            [
+                "--output-schema",
+                config.schema,
+                "-o",
+                config.output,
+            ]
+        )
     if config.allow_shell_network:
         command.extend(["-c", "sandbox_workspace_write.network_access=true"])
     if config.image_inputs:
@@ -90,14 +114,47 @@ def run_command(
     cwd: Path,
     snapshot_callback: Callable[[], None] | None = None,
     snapshot_interval_seconds: int = 0,
+    stdout_path: Path | None = None,
+    stderr_path: Path | None = None,
+    append_logs: bool = False,
 ) -> int:
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
+    if stdout_path:
+        stdout_path.parent.mkdir(parents=True, exist_ok=True)
+    if stderr_path:
+        stderr_path.parent.mkdir(parents=True, exist_ok=True)
+    log_mode = "a" if append_logs else "w"
+    stdout_handle = stdout_path.open(log_mode, encoding="utf-8") if stdout_path else None
+    stderr_handle = stderr_path.open(log_mode, encoding="utf-8") if stderr_path else None
+    stdout_target = stdout_handle if stdout_handle is not None else None
+    stderr_target = stderr_handle if stderr_handle is not None else None
     if snapshot_callback is None or snapshot_interval_seconds <= 0:
-        return subprocess.run(list(command), cwd=cwd, env=env, text=True, check=False).returncode
+        try:
+            return subprocess.run(
+                list(command),
+                cwd=cwd,
+                env=env,
+                text=True,
+                check=False,
+                stdout=stdout_target,
+                stderr=stderr_target,
+            ).returncode
+        finally:
+            if stdout_handle is not None:
+                stdout_handle.close()
+            if stderr_handle is not None:
+                stderr_handle.close()
 
-    process = subprocess.Popen(list(command), cwd=cwd, env=env, text=True)
+    process = subprocess.Popen(
+        list(command),
+        cwd=cwd,
+        env=env,
+        text=True,
+        stdout=stdout_target,
+        stderr=stderr_target,
+    )
     next_snapshot = time.monotonic() + snapshot_interval_seconds
     try:
         while True:
@@ -113,6 +170,11 @@ def run_command(
     except BaseException:
         snapshot_callback()
         raise
+    finally:
+        if stdout_handle is not None:
+            stdout_handle.close()
+        if stderr_handle is not None:
+            stderr_handle.close()
 
 
 @dataclass(frozen=True)
@@ -160,6 +222,9 @@ def _configured_output_files(config: CodexExecConfig) -> frozenset[str]:
             config.article_output,
             config.source_ledger_output,
             config.image_ledger_output,
+            config.claim_ledger_output,
+            config.preflight_result_output,
+            config.run_manifest_output,
         ]
     )
 
@@ -268,6 +333,7 @@ def make_file_snapshot(config: CodexExecConfig) -> FileSnapshot:
         allowed_prefixes=(
             f"work/runs/{config.run_id}/",
             f"outputs/{config.run_id}/",
+            f"logs/{config.run_id}/",
             "outputs/latest/",
         ),
         allowed_files=_configured_output_files(config),
@@ -312,6 +378,9 @@ def validate_file_snapshot(config: CodexExecConfig, snapshot: FileSnapshot) -> l
         config.article_output,
         config.source_ledger_output,
         config.image_ledger_output,
+        config.claim_ledger_output,
+        config.preflight_result_output,
+        config.run_manifest_output,
     ]:
         source = resolve_under_root(config.root, source_value)
         if not source.is_file():
@@ -332,8 +401,15 @@ def mirror_latest_outputs(config: CodexExecConfig) -> None:
         config.article_output,
         config.source_ledger_output,
         config.image_ledger_output,
+        config.claim_ledger_output,
+        config.preflight_result_output,
+        config.run_manifest_output,
+        config.earnings_delta_matrix_output,
+        config.earnings_delta_matrix_md,
     ]:
         source = resolve_under_root(config.root, source_value)
+        if source_value in {config.earnings_delta_matrix_output, config.earnings_delta_matrix_md} and not source.is_file():
+            continue
         if not source.is_file():
             raise FileNotFoundError(
                 f"missing configured output: {_config_path_as_rel(config, source_value)}"

@@ -23,5 +23,28 @@ network_access = false
 exclude_slash_tmp = true
 exclude_tmpdir_env_var = true
 
+[shell_environment_policy]
+inherit = "core"
+ignore_default_excludes = false
+exclude = [
+  "AWS_*",
+  "AZURE_*",
+  "GCP_*",
+  "GOOGLE_*",
+  "OPENAI_API_KEY",
+  "CODEX_API_KEY",
+  "*TOKEN*",
+  "*SECRET*",
+  "*PASSWORD*",
+]
+include_only = [
+  "PATH",
+  "HOME",
+  "USER",
+  "TMPDIR",
+  "PYTHONUTF8",
+  "PYTHONIOENCODING",
+]
+
 [windows]
 sandbox = "elevated"

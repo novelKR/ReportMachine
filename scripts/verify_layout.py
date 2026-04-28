@@ -34,18 +34,24 @@ REQUIRED_FILES = [
     "prompts/SOURCE_POLICY.md",
     "prompts/AUTHOR_PROFILE.md",
     "schemas/article_result.schema.json",
+    "schemas/preflight_result.schema.json",
+    "schemas/claim_ledger.schema.json",
     "schemas/summary_result.schema.json",
+    "schemas/earnings_delta.schema.json",
     "inputs/topic.md",
     "inputs/sources.csv",
     "scripts/run_article.py",
     "scripts/run_summary.py",
     "scripts/package_source.py",
     "src/reportmachine_runner/artifacts.py",
+    "src/reportmachine_runner/audit.py",
     "src/reportmachine_runner/cli.py",
     "src/reportmachine_runner/config.py",
     "src/reportmachine_runner/codex_exec.py",
     "src/reportmachine_runner/intake.py",
+    "src/reportmachine_runner/manifest.py",
     "src/reportmachine_runner/prompt.py",
+    "src/reportmachine_runner/preflight.py",
     "src/reportmachine_runner/source_ingest.py",
     "src/reportmachine_runner/summary.py",
 ]
@@ -88,6 +94,7 @@ RELEASE_BLOCKED_PATTERNS = [
 RELEASE_ARTIFACT_DIRS = [
     "outputs",
     "work",
+    "logs",
 ]
 
 RELEASE_ALLOWED_ARTIFACT_NAMES = {
@@ -269,6 +276,8 @@ def main() -> int:
             "OpenAI File Search/vector-store upload is not used by the runner",
             "Codex internal image generation tools only",
             "python3 scripts/package_source.py",
+            "--phase",
+            "--json-events",
             "Git HEAD",
             "--allow-dirty",
         ],
@@ -284,6 +293,9 @@ def main() -> int:
             "python3 scripts/package_source.py",
             "unzip ReportMachine-source-",
             "--allow-dirty",
+            "preflight_result.json",
+            "claim_ledger.json",
+            "run_manifest.json",
         ],
     )
 
@@ -299,6 +311,8 @@ def main() -> int:
             "$summary-output",
             "App-native fallback exception",
             "schemas/article_result.schema.json",
+            "schemas/preflight_result.schema.json",
+            "schemas/claim_ledger.schema.json",
             "schemas/summary_result.schema.json",
         ],
     )
@@ -334,6 +348,7 @@ def main() -> int:
         [
             "OpenAI API/File Search/vector store uploads are disabled",
             "openai_file_search = disabled",
+            "Final claim_ledger.json",
         ],
     )
 

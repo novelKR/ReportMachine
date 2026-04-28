@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail"]
+    },
+    "article_type": {
+      "type": "string",
+      "enum": ["industry", "earnings", "preview"]
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "required_sources": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": ["pass", "fail", "not_required"]
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "blocking_errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "status",
+    "article_type",
+    "run_id",
+    "required_sources",
+    "warnings",
+    "blocking_errors"
+  ]
+}

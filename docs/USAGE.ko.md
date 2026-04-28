@@ -94,7 +94,15 @@ python3 scripts/run_article.py --mode industry
 python3 scripts/run_article.py --mode earnings
 ```
 
-러너는 내부적으로 `codex exec` 명령을 구성하고, `schemas/article_result.schema.json`에 맞는 최종 JSON을 `-o` 경로에 저장하게 합니다. 기본 web search 설정은 산업 글은 `cached`, 실적 글은 `live`입니다.
+기본 실행은 `--phase all`이며 `prepare -> draft -> finalize` 순서로 진행합니다. `prepare`는 intake, source ingest, preflight, manifest만 만들고 Codex 초안을 쓰지 않습니다. `draft`는 preflight pass run에서 draft artifact를 만들고, `finalize`는 draft와 ledger를 검수해 최종 산출물을 씁니다.
+
+```bash
+python3 scripts/run_article.py --mode earnings --phase prepare
+python3 scripts/run_article.py --mode earnings --phase draft --run-id <run_id>
+python3 scripts/run_article.py --mode earnings --phase finalize --run-id <run_id>
+```
+
+러너는 내부적으로 `codex exec` 명령을 구성하고, `schemas/article_result.schema.json`에 맞는 최종 JSON을 `-o` 경로에 저장하게 합니다. 기본 web search 설정은 산업 글은 `cached`, 실적 글은 `live`입니다. 실적 preflight는 current/previous release 계열과 deck 계열 자료 네 가지가 모두 source ingest 이후 사용 가능해야 pass입니다.
 
 필요하면 web search를 바꿀 수 있습니다.
 
@@ -107,6 +115,20 @@ python3 scripts/run_article.py --mode industry --web-search disabled
 
 ```bash
 python3 scripts/run_article.py --mode earnings --allow-shell-network
+```
+
+Codex 이벤트 로그가 필요하면 `--json-events`를 사용합니다.
+
+```bash
+python3 scripts/run_article.py --mode earnings --json-events
+```
+
+생성되는 로그:
+
+```text
+logs/{run_id}/codex_events.jsonl
+logs/{run_id}/stderr.log
+logs/{run_id}/run_summary.json
 ```
 
 TOML preset을 사용할 수 있습니다.
@@ -172,7 +194,17 @@ work/runs/{run_id}/reviews/
 outputs/{run_id}/article.md
 outputs/{run_id}/source_ledger.csv
 outputs/{run_id}/image_ledger.csv
+outputs/{run_id}/claim_ledger.json
+outputs/{run_id}/preflight_result.json
+outputs/{run_id}/run_manifest.json
 outputs/{run_id}/article_result.json
+```
+
+실적 글이 성공 상태로 끝나려면 다음 산출물도 필요합니다.
+
+```text
+outputs/{run_id}/earnings_delta_matrix.json
+outputs/{run_id}/earnings_delta_matrix.md
 ```
 
 검증된 성공 실행 후에는 `outputs/latest/`가 최신 산출물로 갱신될 수 있습니다.
@@ -206,6 +238,7 @@ outputs/{run_id}/summary/summary_result.json
 
 - 웹 검색은 후보 발굴용입니다.
 - 최종 정량 주장과 이미지는 repo-local sources, source ledger, image ledger로 추적되어야 합니다.
+- 핵심 주장은 `claim_ledger.json`에서 source_id와 source_quote_or_datapoint에 연결되어야 합니다.
 - 출처 URL, 수치, author anecdote를 지어내면 안 됩니다.
 - 일반 산업 글에는 valuation 중심 금융 지표와 투자 추천 표현을 쓰지 않습니다.
 - 실적 글은 실적 품질 분석에 필요한 재무 지표를 허용하지만, target price, buy/sell/hold, valuation call은 여전히 금지입니다.
@@ -213,6 +246,7 @@ outputs/{run_id}/summary/summary_result.json
 - AI 생성 A4 이미지는 `outputs/{run_id}/summary/` 아래의 파생 요약 산출물에서만 허용됩니다.
 - 요약 산출물은 근거 자료가 아니며 `source_ledger.csv` 또는 `image_ledger.csv`를 대체하지 않습니다.
 - 렌더링된 IR slide 이미지는 실제 이미지를 열어 확인한 뒤 caption을 써야 합니다.
+- image ledger는 `actual_slide_title`, `detected_key_datapoints`, `article_anchor_before`, `article_anchor_after`, `keep_or_drop`, `drop_reason`을 포함해야 하며 kept image가 본문에서 실제 참조되어야 합니다.
 
 Runner는 OpenAI API key를 요구하지 않습니다. OpenAI File Search 또는 vector-store upload도 사용하지 않습니다. Codex 사용은 `codex exec`, 설정된 web search, 로컬 렌더 이미지 입력, 그리고 summary output에서 명시된 Codex 내부 image generation tool 요청에 한정됩니다.
 
@@ -234,6 +268,7 @@ Runner는 OpenAI API key를 요구하지 않습니다. OpenAI File Search 또는
 
 - current-quarter와 prior-quarter의 release/shareholder letter 및 investor presentation/IR deck이 모두 있어야 합니다.
 - 필수 자료가 없으면 full article을 만들지 않고 `checklist_status: "fail"`과 non-publishable failure note가 나오는 것이 정상입니다.
+- preflight fail은 Codex를 호출하지 않고 deterministic `article_result.json`, `preflight_result.json`, `run_manifest.json`을 남깁니다.
 
 산출물 검증이 실패하는 경우:
 

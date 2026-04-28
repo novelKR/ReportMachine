@@ -30,6 +30,16 @@ python3 scripts/run_article.py --config reportmachine.example.toml --profile def
 
 Default outputs are written under `outputs/{run_id}/`. After a successful validated run, `outputs/latest/` is refreshed from that run.
 
+The article runner is phase-gated. The default is `--phase all`, which runs `prepare -> draft -> finalize`. You can stop after the local gate, run a draft-only Codex pass, or finalize an existing draft:
+
+```bash
+python3 scripts/run_article.py --mode earnings --phase prepare
+python3 scripts/run_article.py --mode earnings --phase draft --run-id <run_id>
+python3 scripts/run_article.py --mode earnings --phase finalize --run-id <run_id>
+```
+
+`prepare` runs intake, source ingest, strict preflight, and manifest creation without drafting. Earnings preflight requires usable current and previous release/deck materials before Codex is called. The runner writes `outputs/{run_id}/preflight_result.json`, `outputs/{run_id}/run_manifest.json`, and later `outputs/{run_id}/claim_ledger.json`. Earnings runs also require `outputs/{run_id}/earnings_delta_matrix.json` and `.md` before final success.
+
 Earnings runs default to live Codex web search. Industry runs default to cached Codex web search.
 Override when needed:
 
@@ -43,6 +53,14 @@ Shell network access remains disabled by default. Enable it only for runs that n
 ```bash
 python3 scripts/run_article.py --mode earnings --allow-shell-network
 ```
+
+To capture newline-delimited Codex events for troubleshooting or regression runs:
+
+```bash
+python3 scripts/run_article.py --mode earnings --json-events
+```
+
+This writes `logs/{run_id}/codex_events.jsonl`, `logs/{run_id}/stderr.log`, and `logs/{run_id}/run_summary.json`.
 
 Derivative A4 summary output is opt-in and runs only after article outputs are complete:
 
@@ -77,9 +95,11 @@ python3 scripts/run_article.py --prepare-only --mode industry --run-id ai_power_
   --intake-topic "AI 데이터센터 전력 인프라 병목과 전력기기 공급망"
 ```
 
-`--prepare-only` creates directories, source-ingest artifacts, and `work/runs/{run_id}/prepare_manifest.json` without running `codex exec`. The current Codex App session can then use that manifest and the repo-local prompt contracts as the App-native fallback. Nested CLI execution still requires `codex` to be installed, authenticated, available on `PATH`, and trusted for this project.
+`--prepare-only` is the compatibility alias for `--phase prepare` plus App-native fallback prompt generation. It creates directories, source-ingest artifacts, preflight output, run manifest, and `work/runs/{run_id}/prepare_manifest.json` without running `codex exec`. The current Codex App session can then use that manifest and the repo-local prompt contracts as the App-native fallback. Nested CLI execution still requires `codex` to be installed, authenticated, available on `PATH`, and trusted for this project.
 
 Before Codex runs, the runner preprocesses `inputs/sources.csv` into repo-local source artifacts under `work/runs/{run_id}/`. Local files are copied into `research/sources/`; allowed HTTPS sources are downloaded only when shell network access is explicitly enabled. Downloaded or registered sources are hashed, PDF text/index files are written under `research/pdf_text/` and `research/pdf_index.jsonl`, and rendered PDF page images are inventoried under `images/rendered/` when Poppler tools such as `pdftotext` and `pdftoppm` are available.
+
+Final image ledgers must include caption audit fields: `actual_slide_title`, `detected_key_datapoints`, `article_anchor_before`, `article_anchor_after`, `keep_or_drop`, and `drop_reason`. Final claim ledgers must connect core claims to source IDs and datapoints; unsupported or human-review claims block finalization.
 
 Automatic downloads are limited to official or explicitly allowed domains. Add project-specific IR domains in `reportmachine.local.toml`:
 

@@ -34,7 +34,16 @@ class PackageSourceTests(unittest.TestCase):
             stdout=subprocess.PIPE,
         )
         rels = {raw_rel for raw_rel in process.stdout.decode("utf-8").split("\0") if raw_rel}
-        for rel in ["scripts/package_source.py", "tests/test_package_source.py"]:
+        for rel in [
+            "scripts/package_source.py",
+            "tests/test_package_source.py",
+            "schemas/preflight_result.schema.json",
+            "schemas/claim_ledger.schema.json",
+            "src/reportmachine_runner/audit.py",
+            "src/reportmachine_runner/manifest.py",
+            "src/reportmachine_runner/preflight.py",
+            "src/reportmachine_runner/schema_validation.py",
+        ]:
             if (PROJECT_ROOT / rel).exists():
                 rels.add(rel)
         for raw_rel in sorted(rels):

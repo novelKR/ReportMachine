@@ -25,7 +25,7 @@ Your scope:
 - Treat missing required current-quarter or prior-quarter release/deck materials as draft-blocking missing materials.
 - Identify missing materials instead of inventing facts.
 
-Return Markdown with these sections only:
+Return Markdown with these sections and include one fenced `json` block named `source_research_result` with the same information:
 1. task_type
 2. recent_trigger_candidates
 3. primary_source_requirements

@@ -57,9 +57,12 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
 
 - Inputs: `inputs/topic.md`, `inputs/sources.csv`
 - Intermediate artifacts: `work/runs/{run_id}/research/`, `work/runs/{run_id}/ledgers/`, `work/runs/{run_id}/images/`, `work/runs/{run_id}/drafts/`, `work/runs/{run_id}/reviews/`
+- Phase and audit artifacts: `outputs/{run_id}/preflight_result.json`, `outputs/{run_id}/run_manifest.json`, `outputs/{run_id}/claim_ledger.json`
+- Earnings delta artifacts: `outputs/{run_id}/earnings_delta_matrix.json`, `outputs/{run_id}/earnings_delta_matrix.md`
 - Final artifacts: `outputs/{run_id}/article.md`, `outputs/{run_id}/source_ledger.csv`, `outputs/{run_id}/image_ledger.csv`
 - Structured result: `outputs/{run_id}/article_result.json` is written only by `codex exec -o` from the final assistant message, not directly by an agent.
 - App-native fallback exception: after `scripts/run_article.py --prepare-only`, if `codex` CLI is unavailable and the current Codex App session is completing the workflow directly, the parent agent may write `outputs/{run_id}/article_result.json` itself. It must match `schemas/article_result.schema.json` and preserve the same output-file contract.
+- Preflight, claim, and summary structured artifacts must match `schemas/preflight_result.schema.json`, `schemas/claim_ledger.schema.json`, and `schemas/summary_result.schema.json`.
 - Derivative summary artifacts: `outputs/{run_id}/summary/summary_a4.png`, `outputs/{run_id}/summary/summary_prompt.md`, `outputs/{run_id}/summary/summary_claim_map.csv`, `outputs/{run_id}/summary/summary_manifest.json`, `outputs/{run_id}/summary/summary_result.json`
 - Structured summary result: `outputs/{run_id}/summary/summary_result.json` must match `schemas/summary_result.schema.json`.
 - Latest mirror: after a successful, validated run, `outputs/latest/` may be updated from `outputs/{run_id}/`.

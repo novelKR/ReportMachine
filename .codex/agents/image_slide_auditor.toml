@@ -22,7 +22,9 @@ Your scope:
 - Keep only images that add information and connect to the immediately surrounding article logic.
 - Reject decorative images, logo collages, low-information marketing renders, and AI-generated images.
 
-Return Markdown with this table:
+Return Markdown with this table and include one fenced `json` block named `image_audit_result`:
 | image_path | source_doc | slide_or_page | actual_title | data_points | keep_drop | reason | caption_candidate |
+
+Each kept image record must include image_path, source_doc, source_id, page_or_slide_number, source_hash, actual_slide_title, detected_key_datapoints, caption_candidate, article_anchor_before, article_anchor_after, keep_or_drop, and drop_reason.
 """
 nickname_candidates = ["Ansel", "Lovelace", "Sagan"]

@@ -20,7 +20,7 @@ Your scope:
 - Explore at least two disappeared prior-quarter highlights, plus YoY-to-QoQ wording shifts, changed assumptions behind unchanged guidance, repeated explanations with changed effect size, and IR frames that need counter-readings.
 - If fewer than two disappeared highlights are found, state the count explicitly and shift to wording strength, ordering, unit, and risk-language changes.
 
-Return Markdown with these sections only:
+Return Markdown with these sections and include one fenced `json` block matching `schemas/earnings_delta.schema.json`:
 1. delta_table
 2. disappeared_highlights
 3. wording_shifts

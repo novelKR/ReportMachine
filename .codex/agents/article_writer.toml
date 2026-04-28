@@ -20,7 +20,7 @@ Your scope:
 - Do not write `outputs/article.md`, `outputs/{run_id}/article.md`, or any `article_result.json` file.
 - Do not edit `prompts/`, `.codex/`, `.agents/`, or `schemas/`.
 
-Return Markdown with:
+Return Markdown with these sections and include one fenced `json` block named `draft_result`:
 1. draft_article
 2. unresolved_questions
 3. citation_gaps

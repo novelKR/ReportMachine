@@ -14,6 +14,11 @@ FINAL_ARTIFACT_NAMES = (
     "article.md",
     "source_ledger.csv",
     "image_ledger.csv",
+    "claim_ledger.json",
+    "preflight_result.json",
+    "run_manifest.json",
+    "earnings_delta_matrix.json",
+    "earnings_delta_matrix.md",
 )
 
 
@@ -39,6 +44,11 @@ class ArtifactPaths:
     article_output: str
     source_ledger_output: str
     image_ledger_output: str
+    claim_ledger_output: str
+    preflight_result_output: str
+    run_manifest_output: str
+    earnings_delta_matrix_output: str
+    earnings_delta_matrix_md: str
     summary_dir: str | None = None
 
 
@@ -84,6 +94,11 @@ def _write_manifest(target: Path, *, paths: ArtifactPaths, kind: str) -> None:
             "article_md": "article.md",
             "source_ledger_csv": "source_ledger.csv",
             "image_ledger_csv": "image_ledger.csv",
+            "claim_ledger_json": "claim_ledger.json",
+            "preflight_result_json": "preflight_result.json",
+            "run_manifest_json": "run_manifest.json",
+            "earnings_delta_matrix_json": "earnings_delta_matrix.json",
+            "earnings_delta_matrix_md": "earnings_delta_matrix.md",
         },
         "internal_paths": {
             "work_run_dir": paths.work_run_dir,
@@ -91,6 +106,11 @@ def _write_manifest(target: Path, *, paths: ArtifactPaths, kind: str) -> None:
             "article_md": paths.article_output,
             "source_ledger_csv": paths.source_ledger_output,
             "image_ledger_csv": paths.image_ledger_output,
+            "claim_ledger_json": paths.claim_ledger_output,
+            "preflight_result_json": paths.preflight_result_output,
+            "run_manifest_json": paths.run_manifest_output,
+            "earnings_delta_matrix_json": paths.earnings_delta_matrix_output,
+            "earnings_delta_matrix_md": paths.earnings_delta_matrix_md,
             "summary_dir": paths.summary_dir,
         },
     }
@@ -136,6 +156,11 @@ def snapshot_external_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) 
         (paths.article_output, "article.md"),
         (paths.source_ledger_output, "source_ledger.csv"),
         (paths.image_ledger_output, "image_ledger.csv"),
+        (paths.claim_ledger_output, "claim_ledger.json"),
+        (paths.preflight_result_output, "preflight_result.json"),
+        (paths.run_manifest_output, "run_manifest.json"),
+        (paths.earnings_delta_matrix_output, "earnings_delta_matrix.json"),
+        (paths.earnings_delta_matrix_md, "earnings_delta_matrix.md"),
     ]:
         _copy_existing_file(resolve_under_root(paths.root, source_value), outputs_dir / name)
     if paths.summary_dir:
@@ -160,8 +185,15 @@ def export_final_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) -> No
         (paths.article_output, "article.md"),
         (paths.source_ledger_output, "source_ledger.csv"),
         (paths.image_ledger_output, "image_ledger.csv"),
+        (paths.claim_ledger_output, "claim_ledger.json"),
+        (paths.preflight_result_output, "preflight_result.json"),
+        (paths.run_manifest_output, "run_manifest.json"),
+        (paths.earnings_delta_matrix_output, "earnings_delta_matrix.json"),
+        (paths.earnings_delta_matrix_md, "earnings_delta_matrix.md"),
     ]:
         source = resolve_under_root(paths.root, source_value)
+        if name.startswith("earnings_delta_matrix") and not source.is_file():
+            continue
         if not source.is_file():
             raise FileNotFoundError(f"missing configured output: {source_value}")
         shutil.copy2(source, temp / name)

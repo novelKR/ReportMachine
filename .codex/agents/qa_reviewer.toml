@@ -19,7 +19,7 @@ Your scope:
 - Treat earnings-specific financial metrics as allowed only for earnings quality analysis; investment recommendation and valuation leakage remain prohibited.
 - Prefer concrete violations with required fixes over style commentary.
 
-Return Markdown with this table:
+Return Markdown with this table and include one fenced `json` block named `qa_report`:
 | priority | issue | prompt_reference | why_it_matters | required_fix |
 Then add:
 overall_status: pass | pass_with_warnings | fail
