@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "task_type": {
+      "type": "string",
+      "enum": ["industry", "earnings", "preview", "unknown"]
+    },
+    "one_sentence_insight_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "recent_trigger_candidates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "source_requirements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "missing_materials": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "risks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "task_type",
+    "one_sentence_insight_candidates",
+    "recent_trigger_candidates",
+    "source_requirements",
+    "missing_materials",
+    "risks"
+  ]
+}

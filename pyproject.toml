@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=65", "wheel>=0.40"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "reportmachine-runner"
+version = "0.1.0"
+description = "OS-neutral Codex runner for ReportMachine article workflows."
+requires-python = ">=3.10"
+readme = "AGENTS.md"
+authors = [{ name = "ReportMachine" }]
+dependencies = []
+
+[project.optional-dependencies]
+build = ["pyinstaller>=6.0"]
+dev = ["pyinstaller>=6.0"]
+
+[project.scripts]
+reportmachine-runner = "reportmachine_runner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

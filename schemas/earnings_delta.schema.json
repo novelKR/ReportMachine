@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "delta_table": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item": {
+            "type": "string"
+          },
+          "prior_quarter": {
+            "type": "string"
+          },
+          "current_quarter": {
+            "type": "string"
+          },
+          "change_type": {
+            "type": "string"
+          },
+          "interpretation": {
+            "type": "string"
+          },
+          "verification_point": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "item",
+          "prior_quarter",
+          "current_quarter",
+          "change_type",
+          "interpretation",
+          "verification_point"
+        ]
+      }
+    },
+    "disappeared_highlights": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "wording_shifts": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "guidance_assumption_changes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "ir_frame": {
+      "type": "string"
+    },
+    "counter_reading": {
+      "type": "string"
+    },
+    "scorecard_candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "headline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "leading_indicators": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "transparency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "execution": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "total",
+        "headline",
+        "quality",
+        "leading_indicators",
+        "transparency",
+        "execution",
+        "summary"
+      ]
+    },
+    "next_quarter_verification_points": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "delta_table",
+    "disappeared_highlights",
+    "wording_shifts",
+    "guidance_assumption_changes",
+    "ir_frame",
+    "counter_reading",
+    "scorecard_candidate",
+    "next_quarter_verification_points"
+  ]
+}

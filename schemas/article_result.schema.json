@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "article_type": {
+      "type": "string",
+      "enum": ["industry", "earnings", "preview"]
+    },
+    "title": {
+      "type": "string"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "one_sentence_insight": {
+      "type": "string"
+    },
+    "scorecard": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "headline": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "leading_indicators": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "transparency": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "execution": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20
+        },
+        "summary": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "total",
+        "headline",
+        "quality",
+        "leading_indicators",
+        "transparency",
+        "execution",
+        "summary"
+      ]
+    },
+    "output_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_md": {
+          "type": "string"
+        },
+        "source_ledger_csv": {
+          "type": "string"
+        },
+        "image_ledger_csv": {
+          "type": "string"
+        }
+      },
+      "required": ["article_md", "source_ledger_csv", "image_ledger_csv"]
+    },
+    "critical_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checklist_status": {
+      "type": "string",
+      "enum": ["pass", "pass_with_warnings", "fail"]
+    }
+  },
+  "required": [
+    "article_type",
+    "title",
+    "subtitle",
+    "one_sentence_insight",
+    "scorecard",
+    "output_files",
+    "critical_warnings",
+    "checklist_status"
+  ]
+}
