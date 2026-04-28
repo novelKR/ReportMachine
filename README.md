@@ -38,6 +38,32 @@ Shell network access remains disabled by default. Enable it only for runs that n
 python3 scripts/run_article.py --mode earnings --allow-shell-network
 ```
 
+## Conversational Intake
+
+For short chat-style requests, use `$article-intake` first. The intake skill asks the missing questions, produces an approval plan, and after approval creates run-local inputs under `work/runs/{run_id}/intake/`.
+
+Example approved intake execution:
+
+```bash
+python3 scripts/run_article.py --mode industry --run-id ai_power_grid_20260428 \
+  --intake-topic "AI 데이터센터 전력 인프라 병목과 전력기기 공급망" \
+  --intake-core-question "AI 서버 수요가 늘어날 때 병목이 왜 전력망 장비로 이동하는가?" \
+  --intake-recent-trigger "최근 데이터센터 전력 수요 전망과 전력기기 공급망 리드타임 변화" \
+  --intake-source-note "IEA, DOE, utility planning, and official company technical or IR materials" \
+  --intake-output-notes "full report"
+```
+
+By default, generated intake files are run-local and do not overwrite `inputs/topic.md` or `inputs/sources.csv`. Add `--intake-mirror-inputs` only when the user explicitly wants the approved brief mirrored into the tracked input templates.
+
+For Codex App-only environments where the `codex` CLI is unavailable, prepare the same run without nested CLI execution:
+
+```bash
+python3 scripts/run_article.py --prepare-only --mode industry --run-id ai_power_grid_20260428 \
+  --intake-topic "AI 데이터센터 전력 인프라 병목과 전력기기 공급망"
+```
+
+`--prepare-only` creates directories, source-ingest artifacts, and `work/runs/{run_id}/prepare_manifest.json` without running `codex exec`. The current Codex App session can then use that manifest and the repo-local prompt contracts as the App-native fallback. Nested CLI execution still requires `codex` to be installed, authenticated, available on `PATH`, and trusted for this project.
+
 Before Codex runs, the runner preprocesses `inputs/sources.csv` into repo-local source artifacts under `work/runs/{run_id}/`. Local files are copied into `research/sources/`; allowed HTTPS sources are downloaded only when shell network access is explicitly enabled. Downloaded or registered sources are hashed, PDF text/index files are written under `research/pdf_text/` and `research/pdf_index.jsonl`, and rendered PDF page images are inventoried under `images/rendered/` when Poppler tools such as `pdftotext` and `pdftoppm` are available.
 
 Automatic downloads are limited to official or explicitly allowed domains. Add project-specific IR domains in `reportmachine.local.toml`:

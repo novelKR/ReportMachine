@@ -1,6 +1,18 @@
 from __future__ import annotations
 
 
+def build_result_output_instruction(*, result_output: str, app_native_fallback: bool = False) -> str:
+    if app_native_fallback:
+        return (
+            "Return final JSON matching the configured output schema and write that schema-valid JSON "
+            f"directly to `{result_output}` because this App-native fallback flow does not run Codex CLI `-o`."
+        )
+    return (
+        f"Return final JSON matching the configured output schema. Do not write `{result_output}` directly; "
+        "Codex CLI `-o` saves the final assistant message there."
+    )
+
+
 def build_prompt(
     *,
     mode: str,
@@ -20,6 +32,7 @@ def build_prompt(
     source_ledger_output: str,
     image_ledger_output: str,
     result_output: str,
+    app_native_fallback: bool = False,
 ) -> str:
     skill = "$earnings-article" if mode == "earnings" else "$industry-article"
     article_type = "published earnings or IR review" if mode == "earnings" else "general industry analysis"
@@ -66,7 +79,10 @@ def build_prompt(
             f"Write the image ledger to `{image_ledger_output}`.",
             "Final source_ledger.csv must preserve source_id, url, local_path, sha256, ingest_status, allowed_domain, and blocked_reason where available.",
             "Final image_ledger.csv must preserve rendered image path, source PDF, page or slide, source hash, inspected status, caption basis, keep/drop reason, and caption candidate where available.",
-            f"Return final JSON matching the configured output schema. Do not write `{result_output}` directly; Codex CLI `-o` saves the final assistant message there.",
+            build_result_output_instruction(
+                result_output=result_output,
+                app_native_fallback=app_native_fallback,
+            ),
             "If required materials are missing, do not invent facts; return checklist_status `fail` with critical_warnings.",
             f"When checklist_status is `fail` because required materials are missing, write a non-publishable failure note to `{article_output}` instead of a publishable article.",
         ]

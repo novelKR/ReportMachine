@@ -24,6 +24,7 @@ REQUIRED_FILES = [
     ".agents/skills/industry-article/SKILL.md",
     ".agents/skills/earnings-article/SKILL.md",
     ".agents/skills/article-qa/SKILL.md",
+    ".agents/skills/article-intake/SKILL.md",
     "prompts/PROMPT.md",
     "prompts/FORMAT.md",
     "prompts/EARNINGS_PROMPT.md",
@@ -37,6 +38,7 @@ REQUIRED_FILES = [
     "src/reportmachine_runner/cli.py",
     "src/reportmachine_runner/config.py",
     "src/reportmachine_runner/codex_exec.py",
+    "src/reportmachine_runner/intake.py",
     "src/reportmachine_runner/prompt.py",
     "src/reportmachine_runner/source_ingest.py",
 ]
@@ -86,6 +88,7 @@ API_UPLOAD_GUARDED_FILES = [
     "src/reportmachine_runner/codex_exec.py",
     "src/reportmachine_runner/config.py",
     "src/reportmachine_runner/prompt.py",
+    "src/reportmachine_runner/intake.py",
     "src/reportmachine_runner/source_ingest.py",
 ]
 
@@ -233,9 +236,24 @@ def main() -> int:
         readme_text,
         [
             "--config reportmachine.example.toml --profile default --smoke-test",
+            "$article-intake",
+            "--prepare-only",
+            "App-native fallback",
             "External artifact roots are runner-only",
             "OpenAI API key is not required",
             "OpenAI File Search/vector-store upload is not used by the runner",
+        ],
+    )
+
+    agents_text = (root / "AGENTS.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "AGENTS.md",
+        agents_text,
+        [
+            "$article-intake",
+            "App-native fallback exception",
+            "schemas/article_result.schema.json",
         ],
     )
 

@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from reportmachine_runner import cli
+from reportmachine_runner.intake import SOURCE_DISCOVERY_REQUIRED_ID
 from reportmachine_runner.source_ingest import SourceIngestResult, build_source_ingest_paths
 
 try:
@@ -156,6 +157,28 @@ class CliDryRunTests(unittest.TestCase):
             self.assertEqual(status, 0)
             self.assertIn("smoke-test: command and prompt built without execution", output)
             self.assertIn("Use $earnings-article.", output)
+            self.assertFalse(root.exists())
+
+    def test_intake_smoke_test_does_not_write_run_local_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "missing-root"
+
+            status, output = self.run_cli(
+                [
+                    "--mode",
+                    "industry",
+                    "--run-id",
+                    "test_run",
+                    "--project-root",
+                    str(root),
+                    "--intake-topic",
+                    "AI data center power infrastructure",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("intake_topic: work/runs/test_run/intake/topic.md", output)
             self.assertFalse(root.exists())
 
     def test_direct_script_no_config_smoke_test_does_not_require_site_packages(self) -> None:
@@ -384,6 +407,106 @@ web_search = "cached"
             ]:
                 self.assertTrue(parent.is_dir())
             run_command.assert_called_once()
+
+    def test_prepare_only_with_intake_writes_run_local_inputs_and_manifest_without_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+
+            status, output = self.run_cli(
+                [
+                    "--mode",
+                    "industry",
+                    "--run-id",
+                    "test_run",
+                    "--project-root",
+                    str(root),
+                    "--codex-bin",
+                    "missing-codex-bin",
+                    "--prepare-only",
+                    "--intake-topic",
+                    "AI 데이터센터 전력 인프라 병목과 전력기기 공급망",
+                    "--intake-core-question",
+                    "전력기기 공급망이 왜 병목이 되는가?",
+                    "--intake-recent-trigger",
+                    "최근 데이터센터 전력 수요 전망",
+                    "--intake-source-note",
+                    "IEA and official utility planning materials",
+                    "--intake-output-notes",
+                    "full report",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            topic = root / "work" / "runs" / "test_run" / "intake" / "topic.md"
+            sources = root / "work" / "runs" / "test_run" / "intake" / "sources.csv"
+            manifest = root / "work" / "runs" / "test_run" / "prepare_manifest.json"
+            source_candidate = root / "work" / "runs" / "test_run" / "ledgers" / "source_ledger.candidate.csv"
+            self.assertIn("AI 데이터센터", topic.read_text(encoding="utf-8"))
+            self.assertIn(SOURCE_DISCOVERY_REQUIRED_ID, sources.read_text(encoding="utf-8"))
+            self.assertIn(SOURCE_DISCOVERY_REQUIRED_ID, source_candidate.read_text(encoding="utf-8"))
+            manifest_payload = json.loads(manifest.read_text(encoding="utf-8"))
+            self.assertEqual(manifest_payload["execution"]["codex_command"][0], "missing-codex-bin")
+            self.assertEqual(manifest_payload["paths"]["topic"], "work/runs/test_run/intake/topic.md")
+            self.assertEqual(
+                manifest_payload["paths"]["result_output"],
+                "outputs/test_run/article_result.json",
+            )
+            manifest_prompt = manifest_payload["prompt"]
+            self.assertIn(
+                "write that schema-valid JSON directly to `outputs/test_run/article_result.json`",
+                manifest_prompt,
+            )
+            self.assertIn("App-native fallback flow does not run Codex CLI `-o`", manifest_prompt)
+            self.assertNotIn(
+                "Do not write `outputs/test_run/article_result.json` directly",
+                manifest_prompt,
+            )
+            command_prompt = manifest_payload["execution"]["codex_command"][-1]
+            self.assertIn(
+                "Do not write `outputs/test_run/article_result.json` directly",
+                command_prompt,
+            )
+            self.assertIn("Codex CLI `-o` saves the final assistant message", command_prompt)
+            self.assertIn("prepare-only", output)
+            self.assertFalse((root / "outputs" / "latest").exists())
+
+    def test_prepare_only_with_explicit_run_local_inputs_does_not_require_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            intake = root / "work" / "runs" / "test_run" / "intake"
+            intake.mkdir(parents=True)
+            (intake / "topic.md").write_text("## Topic\n\nExample\n", encoding="utf-8")
+            (intake / "sources.csv").write_text(
+                "source_id,article_type,company,period_role,period,doc_kind,issuer,date,title,url,source_tier,required,local_path,notes\n",
+                encoding="utf-8",
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--mode",
+                    "industry",
+                    "--run-id",
+                    "test_run",
+                    "--project-root",
+                    str(root),
+                    "--codex-bin",
+                    "missing-codex-bin",
+                    "--prepare-only",
+                    "--topic",
+                    "work/runs/test_run/intake/topic.md",
+                    "--sources",
+                    "work/runs/test_run/intake/sources.csv",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            manifest = json.loads(
+                (root / "work" / "runs" / "test_run" / "prepare_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["paths"]["topic"], "work/runs/test_run/intake/topic.md")
+            self.assertEqual(manifest["execution"]["codex_command"][0], "missing-codex-bin")
 
     def test_command_uses_codex_root_schema_run_outputs_and_live_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

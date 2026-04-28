@@ -13,6 +13,10 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
   - If prompt rules conflict, `prompts/EARNINGS_PROMPT.md` overrides the general prompt for earnings-specific requirements.
 - QA-only requests:
   - Use `$article-qa`.
+- Conversational article intake requests:
+  - Use `$article-intake`.
+  - Use it when the user provides a short natural-language topic and wants Codex to ask the missing questions, produce a plan, and after approval prepare/run the article workflow.
+  - Default to run-local generated inputs under `work/runs/{run_id}/intake/`; mirror to `inputs/topic.md` and `inputs/sources.csv` only when the user explicitly approves that persistence target.
 - Preview articles:
   - Do not treat preview requests as ordinary industry analysis.
   - If `prompts/PREVIEW_PROMPT.md` is absent, return a schema-valid failure JSON with `article_type = "preview"`, `checklist_status = "fail"`, and a `critical_warnings` entry that the preview-specific prompt contract is missing.
@@ -47,6 +51,7 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
 - Intermediate artifacts: `work/runs/{run_id}/research/`, `work/runs/{run_id}/ledgers/`, `work/runs/{run_id}/images/`, `work/runs/{run_id}/drafts/`, `work/runs/{run_id}/reviews/`
 - Final artifacts: `outputs/{run_id}/article.md`, `outputs/{run_id}/source_ledger.csv`, `outputs/{run_id}/image_ledger.csv`
 - Structured result: `outputs/{run_id}/article_result.json` is written only by `codex exec -o` from the final assistant message, not directly by an agent.
+- App-native fallback exception: after `scripts/run_article.py --prepare-only`, if `codex` CLI is unavailable and the current Codex App session is completing the workflow directly, the parent agent may write `outputs/{run_id}/article_result.json` itself. It must match `schemas/article_result.schema.json` and preserve the same output-file contract.
 - Latest mirror: after a successful, validated run, `outputs/latest/` may be updated from `outputs/{run_id}/`.
 - Generated artifacts must stay under `work/runs/{run_id}/`, `outputs/{run_id}/`, or `outputs/latest/` unless the user explicitly asks for repo configuration edits.
 - External artifact roots configured by runner TOML presets are runner-only import/export targets. Agents must not write external paths directly.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import replace
@@ -26,6 +27,7 @@ from .codex_exec import (
     validate_file_snapshot,
 )
 from .config import RunnerProfile, load_profile_config, resolve_config_path
+from .intake import ArticleBrief, intake_sources_path, intake_topic_path, write_intake_files
 from .paths import as_posix_arg, find_project_root
 from .paths import resolve_external_root, resolve_under_root
 from .prompt import build_prompt
@@ -110,6 +112,41 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         help="Maximum rendered images passed to Codex CLI --image. Defaults to 20.",
     )
+    parser.add_argument(
+        "--intake-topic",
+        help="Approved conversational intake topic. Writes run-local intake inputs before execution.",
+    )
+    parser.add_argument(
+        "--intake-core-question",
+        default="",
+        help="Approved central question for generated run-local intake topic.md.",
+    )
+    parser.add_argument(
+        "--intake-recent-trigger",
+        default="",
+        help="Approved recent trigger note for generated run-local intake topic.md.",
+    )
+    parser.add_argument(
+        "--intake-source-note",
+        action="append",
+        default=None,
+        help="Approved source requirement note for generated run-local sources.csv. May be repeated.",
+    )
+    parser.add_argument(
+        "--intake-output-notes",
+        default="",
+        help="Approved output notes for generated run-local intake topic.md.",
+    )
+    parser.add_argument(
+        "--intake-mirror-inputs",
+        action="store_true",
+        help="Also mirror generated intake files to inputs/topic.md and inputs/sources.csv.",
+    )
+    parser.add_argument(
+        "--prepare-only",
+        action="store_true",
+        help="Prepare directories, source ingest artifacts, and a prompt manifest without running Codex.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the command and prompt without running Codex.")
     parser.add_argument("--smoke-test", action="store_true", help="Build the command and prompt without creating directories or running Codex.")
     return parser
@@ -190,6 +227,80 @@ def try_snapshot_external_artifacts(
         print(f"Artifact snapshot failed: {exc}", file=sys.stderr)
 
 
+def _has_intake_args(args: argparse.Namespace) -> bool:
+    return any(
+        [
+            args.intake_topic,
+            args.intake_core_question,
+            args.intake_recent_trigger,
+            args.intake_source_note,
+            args.intake_output_notes,
+            args.intake_mirror_inputs,
+        ]
+    )
+
+
+def build_intake_brief(parser: argparse.ArgumentParser, args: argparse.Namespace, mode: str) -> ArticleBrief | None:
+    if not _has_intake_args(args):
+        return None
+    if args.topic or args.sources:
+        parser.error("--intake-topic cannot be combined with --topic or --sources")
+    if not args.intake_topic or not args.intake_topic.strip():
+        parser.error("--intake-topic is required when using conversational intake options")
+    return ArticleBrief(
+        mode=mode,
+        topic=args.intake_topic,
+        core_question=args.intake_core_question,
+        recent_trigger=args.intake_recent_trigger,
+        required_source_notes=tuple(args.intake_source_note or ()),
+        output_notes=args.intake_output_notes,
+    )
+
+
+def write_prepare_manifest(
+    *,
+    root: Path,
+    mode: str,
+    config: CodexExecConfig,
+    command: Sequence[str],
+    topic_path: str,
+    sources_path: str,
+    prepare_manifest: str,
+    prompt: str,
+) -> None:
+    manifest = {
+        "version": 1,
+        "mode": mode,
+        "run_id": config.run_id,
+        "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+        "execution": {
+            "prepared_for": "app_native_fallback_or_manual_codex_cli",
+            "codex_command": list(command),
+            "codex_cli_required_for_command": True,
+        },
+        "paths": {
+            "topic": topic_path,
+            "sources": sources_path,
+            "work_run_dir": config.work_run_dir,
+            "source_ingest_manifest": config.source_ingest_manifest,
+            "source_candidate_ledger": config.source_candidate_ledger,
+            "pdf_index": config.pdf_index,
+            "rendered_images_ledger": config.rendered_images_ledger,
+            "article_output": config.article_output,
+            "source_ledger_output": config.source_ledger_output,
+            "image_ledger_output": config.image_ledger_output,
+            "result_output": config.output,
+        },
+        "prompt": prompt,
+    }
+    target = resolve_under_root(root, prepare_manifest)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -202,6 +313,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("--mode is required unless the selected config profile provides mode")
     if mode not in WEB_SEARCH_DEFAULTS:
         parser.error("--mode must be one of: industry, earnings")
+    intake_brief = build_intake_brief(parser, args, mode)
 
     run_id_prefix = profile.run_id_prefix
     if run_id_prefix and not RUN_ID_PATTERN.fullmatch(run_id_prefix):
@@ -255,8 +367,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     artifact_sync = build_artifact_sync(parser, root, profile)
 
-    topic_path = resolve_repo_arg(parser, root, choose_value(args.topic, profile.topic, "inputs/topic.md"), "--topic")
-    sources_path = resolve_repo_arg(parser, root, choose_value(args.sources, profile.sources, "inputs/sources.csv"), "--sources")
+    topic_default = intake_topic_path(run_id) if intake_brief else choose_value(args.topic, profile.topic, "inputs/topic.md")
+    sources_default = intake_sources_path(run_id) if intake_brief else choose_value(args.sources, profile.sources, "inputs/sources.csv")
+    topic_path = resolve_repo_arg(parser, root, topic_default, "--topic")
+    sources_path = resolve_repo_arg(parser, root, sources_default, "--sources")
     schema = resolve_repo_arg(parser, root, choose_value(args.schema, profile.schema, "schemas/article_result.schema.json"), "--schema")
     output = resolve_repo_arg(parser, root, output, "--output")
     article_output = resolve_repo_arg(parser, root, article_output, "--article-output")
@@ -266,27 +380,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     draft_output = resolve_repo_arg(parser, root, draft_output, "draft output")
     image_notes_dir = resolve_repo_arg(parser, root, image_notes_dir, "image notes directory")
     image_ledger_candidate = resolve_repo_arg(parser, root, image_ledger_candidate, "image ledger candidate")
+    prepare_manifest = resolve_repo_arg(parser, root, f"{work_run_dir}/prepare_manifest.json", "prepare manifest")
     source_ingest_paths = build_source_ingest_paths(work_run_dir)
 
-    prompt = build_prompt(
-        mode=mode,
-        run_id=run_id,
-        topic_path=topic_path,
-        sources_path=sources_path,
-        work_run_dir=as_posix_arg(work_run_dir),
-        draft_output=as_posix_arg(draft_output),
-        image_notes_dir=as_posix_arg(image_notes_dir),
-        image_ledger_candidate=as_posix_arg(image_ledger_candidate),
-        source_ingest_manifest=as_posix_arg(source_ingest_paths.manifest),
-        source_candidate_ledger=as_posix_arg(source_ingest_paths.source_candidate_ledger),
-        pdf_index=as_posix_arg(source_ingest_paths.pdf_index),
-        rendered_images_ledger=as_posix_arg(source_ingest_paths.rendered_images_ledger),
-        source_ingest_enabled=source_ingest_enabled,
-        article_output=as_posix_arg(article_output),
-        source_ledger_output=as_posix_arg(source_ledger_output),
-        image_ledger_output=as_posix_arg(image_ledger_output),
-        result_output=as_posix_arg(output),
-    )
+    prompt_kwargs = {
+        "mode": mode,
+        "run_id": run_id,
+        "topic_path": topic_path,
+        "sources_path": sources_path,
+        "work_run_dir": as_posix_arg(work_run_dir),
+        "draft_output": as_posix_arg(draft_output),
+        "image_notes_dir": as_posix_arg(image_notes_dir),
+        "image_ledger_candidate": as_posix_arg(image_ledger_candidate),
+        "source_ingest_manifest": as_posix_arg(source_ingest_paths.manifest),
+        "source_candidate_ledger": as_posix_arg(source_ingest_paths.source_candidate_ledger),
+        "pdf_index": as_posix_arg(source_ingest_paths.pdf_index),
+        "rendered_images_ledger": as_posix_arg(source_ingest_paths.rendered_images_ledger),
+        "source_ingest_enabled": source_ingest_enabled,
+        "article_output": as_posix_arg(article_output),
+        "source_ledger_output": as_posix_arg(source_ledger_output),
+        "image_ledger_output": as_posix_arg(image_ledger_output),
+        "result_output": as_posix_arg(output),
+    }
+    prompt = build_prompt(**prompt_kwargs)
+    app_native_prompt = build_prompt(**prompt_kwargs, app_native_fallback=True)
 
     config = CodexExecConfig(
         root=root,
@@ -327,12 +444,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         print("cwd:", root)
         print("run_id:", run_id)
         print("command:", command)
+        if intake_brief:
+            print("intake_topic:", topic_path)
+            print("intake_sources:", sources_path)
         print("prompt:")
         print(prompt)
         if args.smoke_test:
             print("smoke-test: command and prompt built without execution")
         return 0
 
+    if intake_brief:
+        write_intake_files(
+            root=root,
+            run_id=run_id,
+            brief=intake_brief,
+            mirror_inputs=args.intake_mirror_inputs,
+        )
     ensure_output_directories(config)
     import_existing_artifacts(artifact_sync, artifact_paths)
     if source_ingest_enabled:
@@ -355,6 +482,22 @@ def main(argv: Sequence[str] | None = None) -> int:
         if ingest_result.image_inputs:
             config = replace(config, image_inputs=ingest_result.image_inputs)
             command = build_command(config)
+    if args.prepare_only:
+        write_prepare_manifest(
+            root=root,
+            mode=mode,
+            config=config,
+            command=command,
+            topic_path=topic_path,
+            sources_path=sources_path,
+            prepare_manifest=prepare_manifest,
+            prompt=app_native_prompt,
+        )
+        print("cwd:", root)
+        print("run_id:", run_id)
+        print("prepare_manifest:", prepare_manifest)
+        print("prepare-only: directories, source ingest artifacts, and prompt manifest prepared without running Codex")
+        return 0
     snapshot = make_file_snapshot(config)
     snapshot_callback = None
     if artifact_sync.enabled and artifact_sync.snapshot_interval_seconds > 0:
