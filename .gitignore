@@ -1,6 +1,8 @@
 .codex-home/
 reportmachine.local.toml
+.DS_Store
 .tmp/
+/tmp*/
 work/runs/
 work/**/*.md
 work/**/*.json

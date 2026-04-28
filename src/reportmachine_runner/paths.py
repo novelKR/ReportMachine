@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path, PureWindowsPath
 
 ROOT_MARKERS = (".git", ".article-root", "AGENTS.md")
+RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+RUN_ID_REQUIREMENT = (
+    "must start with an ASCII letter or digit and may also contain underscore, hyphen, and dot"
+)
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -39,6 +44,12 @@ def resolve_under_root(root: Path, value: str) -> Path:
     except ValueError as exc:
         raise ValueError(f"Path escapes project root: {value}") from exc
     return resolved
+
+
+def validate_run_id(value: str, label: str = "--run-id") -> str:
+    if not RUN_ID_PATTERN.fullmatch(value):
+        raise ValueError(f"{label} {RUN_ID_REQUIREMENT}")
+    return value
 
 
 def resolve_external_root(project_root: Path, value: str) -> Path:

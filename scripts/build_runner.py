@@ -20,7 +20,7 @@ def main() -> int:
     args = parser.parse_args()
 
     root = Path(__file__).resolve().parents[1]
-    entrypoint = root / "src" / "reportmachine_runner" / "pyinstaller_entry.py"
+    specpath = Path(".tmp") / "pyinstaller" / "spec"
 
     command = [
         sys.executable,
@@ -30,16 +30,18 @@ def main() -> int:
         "--name",
         args.name,
         "--distpath",
-        str(root / args.distpath),
+        args.distpath,
         "--workpath",
-        str(root / args.workpath),
+        args.workpath,
+        "--specpath",
+        specpath.as_posix(),
         "--paths",
-        str(root / "src"),
+        "src",
     ]
     if args.clean:
         command.append("--clean")
     command.append("--onefile" if args.mode == "onefile" else "--onedir")
-    command.append(str(entrypoint))
+    command.append("src/reportmachine_runner/pyinstaller_entry.py")
 
     if args.dry_run:
         print("cwd:", root)
@@ -49,6 +51,7 @@ def main() -> int:
     env = os.environ.copy()
     env.setdefault("PYINSTALLER_CONFIG_DIR", str(root / ".tmp" / "pyinstaller"))
     (root / ".tmp" / "pyinstaller").mkdir(parents=True, exist_ok=True)
+    (root / specpath).mkdir(parents=True, exist_ok=True)
     return subprocess.run(command, cwd=root, env=env, text=True, check=False).returncode
 
 

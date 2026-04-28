@@ -39,6 +39,7 @@ class ArtifactPaths:
     article_output: str
     source_ledger_output: str
     image_ledger_output: str
+    summary_dir: str | None = None
 
 
 def _now_iso() -> str:
@@ -90,6 +91,7 @@ def _write_manifest(target: Path, *, paths: ArtifactPaths, kind: str) -> None:
             "article_md": paths.article_output,
             "source_ledger_csv": paths.source_ledger_output,
             "image_ledger_csv": paths.image_ledger_output,
+            "summary_dir": paths.summary_dir,
         },
     }
     (target / "reportmachine_manifest.json").write_text(
@@ -136,6 +138,10 @@ def snapshot_external_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) 
         (paths.image_ledger_output, "image_ledger.csv"),
     ]:
         _copy_existing_file(resolve_under_root(paths.root, source_value), outputs_dir / name)
+    if paths.summary_dir:
+        summary_source = resolve_under_root(paths.root, paths.summary_dir)
+        if summary_source.is_dir():
+            shutil.copytree(summary_source, outputs_dir / "summary")
     _write_manifest(temp, paths=paths, kind="snapshot")
     _atomic_replace_dir(temp, target)
 
@@ -159,6 +165,10 @@ def export_final_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) -> No
         if not source.is_file():
             raise FileNotFoundError(f"missing configured output: {source_value}")
         shutil.copy2(source, temp / name)
+    if paths.summary_dir:
+        summary_source = resolve_under_root(paths.root, paths.summary_dir)
+        if summary_source.is_dir():
+            shutil.copytree(summary_source, temp / "summary")
     _write_manifest(temp, paths=paths, kind="final")
 
     run_target = sync.external_root / "runs" / paths.run_id

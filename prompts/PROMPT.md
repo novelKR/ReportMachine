@@ -384,6 +384,9 @@ Typical article target: 6-12 images. Fewer than 2-3 can weaken evidence support.
 ### 7.6 Strict Prohibitions
 
 - Zero AI-generated images in article outputs.
+- AI-generated A4 images are permitted only as derivative summary outputs under `outputs/{run_id}/summary/`, never inside `article.md` or `image_ledger.csv` as article evidence.
+- Summary image generation must use Codex internal image generation tools only; do not use OpenAI API endpoints, File Search, vector stores, shell downloads, or external image APIs as fallback.
+- Summary images must not add new factual claims, quantitative values, source attributions, charts, or captions absent from the completed article and ledgers.
 - Zero author-created matplotlib, plotly, or Excel charts, even if based on public numbers, unless a rare supply-chain or value-chain schematic exception is explicitly justified.
 - Use only public official materials, public-license materials, or user-provided files.
 - If a rare author-created schematic is used, caption it clearly as "저자 구성 도식 · 각 사 공식 자료 기반".

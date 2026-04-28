@@ -17,6 +17,7 @@ Use this skill for questions such as:
 - "`inputs/topic.md`와 `inputs/sources.csv`는 어떻게 쓰나요?"
 - "`--smoke-test`, `--prepare-only`, `--allow-shell-network` 차이는?"
 - "산출물은 어디에 생기나요?"
+- "`--summary-output`은 무엇을 만드나요?"
 
 Do not use this skill when the user asks to create, draft, or QA an article. Route those tasks to `$article-intake`, `$industry-article`, `$earnings-article`, or `$article-qa`.
 
@@ -37,4 +38,5 @@ Read only the minimum needed:
 - Distinguish Codex App usage from Codex CLI runner usage.
 - Make clear that web search is candidate discovery only; final claims must trace to repo-local sources and ledgers.
 - Mention that OpenAI API keys, File Search, and vector-store uploads are not part of the runner.
+- Mention that summary images use Codex internal image generation tools only and remain separate from article outputs.
 - If the user wants a runnable article workflow from a short topic, route to `$article-intake` rather than expanding usage instructions.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 import io
 import json
 import subprocess
@@ -13,6 +14,12 @@ from unittest.mock import patch
 from reportmachine_runner import cli
 from reportmachine_runner.intake import SOURCE_DISCOVERY_REQUIRED_ID
 from reportmachine_runner.source_ingest import SourceIngestResult, build_source_ingest_paths
+from reportmachine_runner.summary import (
+    SUMMARY_CLAIM_MAP_HEADER,
+    SUMMARY_SCHEMA,
+    build_summary_run_config,
+    source_hashes,
+)
 
 try:
     from jsonschema import Draft202012Validator
@@ -62,11 +69,106 @@ class CliDryRunTests(unittest.TestCase):
                 continue
             (output_dir / name).write_text(name, encoding="utf-8")
 
+    def write_valid_article_outputs(self, root: Path, *, run_id: str = "test_run") -> None:
+        output_dir = root / "outputs" / run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "article.md").write_text("# 제목\n\n본문입니다.\n", encoding="utf-8")
+        (output_dir / "source_ledger.csv").write_text(
+            "source_id,url,local_path\ns1,https://example.com,inputs/source.md\n",
+            encoding="utf-8",
+        )
+        (output_dir / "image_ledger.csv").write_text(
+            "image_path,inspected_status\n,not_available\n",
+            encoding="utf-8",
+        )
+        (output_dir / "article_result.json").write_text(
+            json.dumps(
+                {
+                    "article_type": "industry",
+                    "title": "제목",
+                    "subtitle": "부제",
+                    "one_sentence_insight": "핵심",
+                    "scorecard": None,
+                    "output_files": {
+                        "article_md": f"outputs/{run_id}/article.md",
+                        "source_ledger_csv": f"outputs/{run_id}/source_ledger.csv",
+                        "image_ledger_csv": f"outputs/{run_id}/image_ledger.csv",
+                    },
+                    "critical_warnings": [],
+                    "checklist_status": "pass",
+                },
+                ensure_ascii=False,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+
     def write_config(self, root: Path, text: str, name: str = "reportmachine.toml") -> Path:
         path = root / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         return path
+
+    def write_summary_schema(self, root: Path) -> None:
+        schema_source = Path(__file__).resolve().parents[1] / SUMMARY_SCHEMA
+        target = root / SUMMARY_SCHEMA
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(schema_source.read_text(encoding="utf-8"), encoding="utf-8")
+
+    def write_claim_map_with_row(self, root: Path, config) -> None:
+        claim_map = root / config.paths.summary_claim_map
+        claim_map.parent.mkdir(parents=True, exist_ok=True)
+        with claim_map.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=SUMMARY_CLAIM_MAP_HEADER)
+            writer.writeheader()
+            writer.writerow(
+                {
+                    "summary_item_id": "s1",
+                    "summary_text": "본문입니다.",
+                    "claim_type": "statement",
+                    "source_artifact": "article.md",
+                    "source_path": config.sources.article,
+                    "source_anchor": "# 제목",
+                    "source_url": "",
+                    "notes": "test row",
+                }
+            )
+
+    def write_success_summary_result(
+        self,
+        root: Path,
+        run_id: str = "test_run",
+        *,
+        hashes: dict[str, str] | None = None,
+    ) -> None:
+        config = build_summary_run_config(root=root, run_id=run_id)
+        hashes = hashes or source_hashes(config)
+        summary_dir = root / config.paths.summary_dir
+        summary_dir.mkdir(parents=True, exist_ok=True)
+        (summary_dir / "summary_a4.png").write_bytes(b"png")
+        self.write_claim_map_with_row(root, config)
+        (summary_dir / "summary_result.json").write_text(
+            json.dumps(
+                {
+                    "summary_type": "a4_visual",
+                    "source_article": config.sources.article,
+                    "source_article_sha256": hashes["article_sha256"],
+                    "source_result": config.sources.article_result,
+                    "source_result_sha256": hashes["article_result_sha256"],
+                    "image_generation_surface": "codex_internal_tool",
+                    "output_files": {
+                        "summary_a4_png": config.paths.summary_image,
+                        "summary_prompt_md": config.paths.summary_prompt,
+                        "summary_claim_map_csv": config.paths.summary_claim_map,
+                        "summary_manifest_json": config.paths.summary_manifest,
+                    },
+                    "critical_warnings": [],
+                    "checklist_status": "pass",
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
     def assert_no_ingest_artifacts_in_prompt(self, prompt: str) -> None:
         self.assertNotIn("source_ingest_manifest.json", prompt)
@@ -181,6 +283,31 @@ class CliDryRunTests(unittest.TestCase):
             self.assertIn("intake_topic: work/runs/test_run/intake/topic.md", output)
             self.assertFalse(root.exists())
 
+    def test_summary_output_smoke_test_does_not_create_output_dirs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "missing-root"
+
+            status, output = self.run_cli(
+                [
+                    "--mode",
+                    "industry",
+                    "--run-id",
+                    "test_run",
+                    "--project-root",
+                    str(root),
+                    "--summary-output",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("summary_dir: outputs/test_run/summary", output)
+            self.assertIn("summary_result: outputs/test_run/summary/summary_result.json", output)
+            self.assertIn("summary_image: outputs/test_run/summary/summary_a4.png", output)
+            self.assertIn("Use $summary-output.", output)
+            self.assertIn("Codex internal image generation tools only", output)
+            self.assertFalse(root.exists())
+
     def test_direct_script_no_config_smoke_test_does_not_require_site_packages(self) -> None:
         root = Path(__file__).resolve().parents[1]
         result = subprocess.run(
@@ -291,6 +418,139 @@ run_id_prefix = "custom"
             self.assertIn("inputs/custom-topic.md", output)
             self.assertIn("inputs/custom-sources.csv", output)
             self.assertIn("schemas/custom-schema.json", output)
+
+    def test_config_profile_loads_summary_style(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+
+[profiles.default.summary]
+style_name = "operator_brief"
+style_prompt = "Operator board style."
+negative_prompt = "No tiny text."
+max_visual_claims = 3
+require_source_footer = false
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--run-id",
+                    "test_run",
+                    "--summary-output",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("style_name: `operator_brief`", output)
+            self.assertIn("Operator board style.", output)
+            self.assertIn("No tiny text.", output)
+            self.assertIn("max_visual_claims: `3`", output)
+            self.assertIn("require_source_footer: `false`", output)
+
+    def test_config_profile_summary_enabled_activates_summary_smoke_output(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+
+[profiles.default.summary]
+enabled = true
+style_name = "operator_brief"
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--run-id",
+                    "test_run",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("summary_dir: outputs/test_run/summary", output)
+            self.assertIn("summary_result: outputs/test_run/summary/summary_result.json", output)
+            self.assertIn("Use $summary-output.", output)
+            self.assertIn("style_name: `operator_brief`", output)
+
+    def test_no_summary_output_disables_preset_summary_enable(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+
+[profiles.default.summary]
+enabled = true
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--run-id",
+                    "test_run",
+                    "--no-summary-output",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertNotIn("summary_dir:", output)
+            self.assertNotIn("Use $summary-output.", output)
+
+    def test_config_profile_rejects_unknown_summary_key(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+
+[profiles.default.summary]
+unknown = true
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("profiles.default.summary has unknown key(s): unknown", output)
 
     def test_config_profile_can_disable_source_ingest_prompt_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -995,6 +1255,64 @@ preserve_cache_on_failure = true
             self.assertFalse((root / "outputs" / "test_run").exists())
             self.assertTrue((root / "outputs" / "latest" / "article.md").is_file())
 
+    def test_successful_summary_run_refreshes_local_and_external_latest_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            self.write_summary_schema(root)
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.source_ingest]
+enabled = false
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+""".lstrip(),
+            )
+
+            def fake_article_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_article_outputs(root)
+                return 0
+
+            def fake_summary_run(_command: list[str], *, cwd: Path) -> int:
+                config = build_summary_run_config(root=cwd, run_id="test_run")
+                self.write_success_summary_result(cwd, hashes=source_hashes(config))
+                return 0
+
+            with (
+                patch("reportmachine_runner.cli.run_command", side_effect=fake_article_run),
+                patch("reportmachine_runner.summary.run_command", side_effect=fake_summary_run),
+            ):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                        "--summary-output",
+                    ]
+                )
+
+            self.assertEqual(status, 0, output)
+            self.assertEqual(
+                (root / "outputs/latest/summary/summary_a4.png").read_bytes(),
+                b"png",
+            )
+            self.assertEqual(
+                (external_root / "latest/summary/summary_a4.png").read_bytes(),
+                b"png",
+            )
+            self.assertTrue(
+                (external_root / "runs/test_run/summary/summary_result.json").is_file()
+            )
+
     def test_external_export_failure_preserves_latest_and_success_cache(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = self.init_git_root(temp_dir)
@@ -1040,6 +1358,131 @@ cleanup_cache_on_success = true
             self.assertFalse((latest_dir / "article_result.json").exists())
             self.assertTrue((root / "work" / "runs" / "test_run").is_dir())
             self.assertTrue((root / "outputs" / "test_run").is_dir())
+
+    def test_cli_defers_summary_latest_until_external_export_succeeds(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            latest_dir = root / "outputs" / "latest"
+            latest_summary = latest_dir / "summary"
+            latest_summary.mkdir(parents=True)
+            (latest_dir / "article.md").write_text("stale-article", encoding="utf-8")
+            (latest_summary / "summary_a4.png").write_bytes(b"stale-summary")
+            self.write_summary_schema(root)
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.source_ingest]
+enabled = false
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+""".lstrip(),
+            )
+
+            def fake_article_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_article_outputs(root)
+                return 0
+
+            def fake_summary_run(_command: list[str], *, cwd: Path) -> int:
+                config = build_summary_run_config(root=cwd, run_id="test_run")
+                self.write_success_summary_result(cwd, hashes=source_hashes(config))
+                return 0
+
+            with (
+                patch("reportmachine_runner.cli.run_command", side_effect=fake_article_run),
+                patch("reportmachine_runner.summary.run_command", side_effect=fake_summary_run),
+                patch(
+                    "reportmachine_runner.cli.export_final_artifacts",
+                    side_effect=OSError("disk full"),
+                ),
+            ):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                        "--summary-output",
+                    ]
+                )
+
+            self.assertEqual(status, 2)
+            self.assertIn("Final artifact export failed: disk full", output)
+            self.assertEqual(
+                (latest_dir / "article.md").read_text(encoding="utf-8"),
+                "stale-article",
+            )
+            self.assertEqual(
+                (latest_summary / "summary_a4.png").read_bytes(),
+                b"stale-summary",
+            )
+            self.assertFalse((latest_summary / "summary_result.json").exists())
+            self.assertFalse((external_root / "latest").exists())
+
+    def test_cli_summary_mutation_blocks_external_export_and_latest_mirror(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            self.write_summary_schema(root)
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.source_ingest]
+enabled = false
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+""".lstrip(),
+            )
+
+            def fake_article_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_valid_article_outputs(root)
+                return 0
+
+            def fake_summary_run(_command: list[str], *, cwd: Path) -> int:
+                config = build_summary_run_config(root=cwd, run_id="test_run")
+                hashes = source_hashes(config)
+                (cwd / "outputs" / "test_run" / "article.md").write_text(
+                    "# 제목\n\nsummary changed the article.\n",
+                    encoding="utf-8",
+                )
+                self.write_success_summary_result(cwd, hashes=hashes)
+                return 0
+
+            with (
+                patch("reportmachine_runner.cli.run_command", side_effect=fake_article_run),
+                patch("reportmachine_runner.summary.run_command", side_effect=fake_summary_run),
+            ):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                        "--summary-output",
+                    ]
+                )
+
+            self.assertEqual(status, 2, output)
+            self.assertFalse((external_root / "latest").exists())
+            self.assertFalse(
+                (external_root / "runs" / "test_run" / "reportmachine_manifest.json").exists()
+            )
+            self.assertFalse((external_root / "runs" / "test_run" / "article.md").exists())
+            self.assertFalse((root / "outputs" / "latest").exists())
 
     def test_failed_configured_external_run_preserves_cache_and_writes_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

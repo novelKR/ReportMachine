@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from dataclasses import replace
 from datetime import datetime, timezone
@@ -28,7 +27,7 @@ from .codex_exec import (
 )
 from .config import RunnerProfile, load_profile_config, resolve_config_path
 from .intake import ArticleBrief, intake_sources_path, intake_topic_path, write_intake_files
-from .paths import as_posix_arg, find_project_root
+from .paths import as_posix_arg, find_project_root, validate_run_id
 from .paths import resolve_external_root, resolve_under_root
 from .prompt import build_prompt
 from .source_ingest import (
@@ -40,9 +39,17 @@ from .source_ingest import (
     build_source_ingest_paths,
     run_source_ingest,
 )
+from .summary import (
+    SUMMARY_SCHEMA,
+    SummarySourcePaths,
+    build_summary_command,
+    build_summary_prompt,
+    build_summary_run_config,
+    mirror_latest_summary,
+    run_summary_workflow,
+)
 
 
-RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 WEB_SEARCH_DEFAULTS = {
     "industry": "cached",
     "earnings": "live",
@@ -146,6 +153,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--prepare-only",
         action="store_true",
         help="Prepare directories, source ingest artifacts, and a prompt manifest without running Codex.",
+    )
+    parser.add_argument(
+        "--summary-output",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="After a successful article run, generate derivative A4 summary output under outputs/{run_id}/summary.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the command and prompt without running Codex.")
     parser.add_argument("--smoke-test", action="store_true", help="Build the command and prompt without creating directories or running Codex.")
@@ -316,11 +329,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     intake_brief = build_intake_brief(parser, args, mode)
 
     run_id_prefix = profile.run_id_prefix
-    if run_id_prefix and not RUN_ID_PATTERN.fullmatch(run_id_prefix):
-        parser.error("run_id_prefix must start with an ASCII letter or digit and may also contain underscore, hyphen, and dot")
+    if run_id_prefix:
+        try:
+            validate_run_id(run_id_prefix, "run_id_prefix")
+        except ValueError as exc:
+            parser.error(str(exc))
     run_id = args.run_id or default_run_id(run_id_prefix)
-    if not RUN_ID_PATTERN.fullmatch(run_id):
-        parser.error("--run-id must start with an ASCII letter or digit and may also contain underscore, hyphen, and dot")
+    try:
+        validate_run_id(run_id, "--run-id")
+    except ValueError as exc:
+        parser.error(str(exc))
 
     work_run_dir = f"work/runs/{run_id}"
     draft_output = f"{work_run_dir}/drafts/draft_article.md"
@@ -366,6 +384,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser,
     )
     artifact_sync = build_artifact_sync(parser, root, profile)
+    summary_output_enabled = choose_bool(args.summary_output, profile.summary.enabled)
 
     topic_default = intake_topic_path(run_id) if intake_brief else choose_value(args.topic, profile.topic, "inputs/topic.md")
     sources_default = intake_sources_path(run_id) if intake_brief else choose_value(args.sources, profile.sources, "inputs/sources.csv")
@@ -438,6 +457,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         article_output=as_posix_arg(article_output),
         source_ledger_output=as_posix_arg(source_ledger_output),
         image_ledger_output=as_posix_arg(image_ledger_output),
+        summary_dir=f"outputs/{run_id}/summary" if summary_output_enabled else None,
+    )
+    summary_config = build_summary_run_config(
+        root=root,
+        run_id=run_id,
+        codex_bin=args.codex_bin,
+        schema=SUMMARY_SCHEMA,
+        web_search="disabled",
+        profile=profile.summary,
+        sources=SummarySourcePaths(
+            article_result=as_posix_arg(output),
+            article=as_posix_arg(article_output),
+            source_ledger=as_posix_arg(source_ledger_output),
+            image_ledger=as_posix_arg(image_ledger_output),
+        ),
     )
 
     if args.dry_run or args.smoke_test:
@@ -449,6 +483,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             print("intake_sources:", sources_path)
         print("prompt:")
         print(prompt)
+        if summary_output_enabled:
+            summary_prompt = build_summary_prompt(
+                summary_config,
+                article_status="available_after_article_run",
+            )
+            print("summary_dir:", summary_config.paths.summary_dir)
+            print("summary_result:", summary_config.paths.summary_result)
+            print("summary_image:", summary_config.paths.summary_image)
+            print("summary_command:", build_summary_command(summary_config, summary_prompt))
+            print("summary_prompt:")
+            print(summary_prompt)
         if args.smoke_test:
             print("smoke-test: command and prompt built without execution")
         return 0
@@ -525,11 +570,20 @@ def main(argv: Sequence[str] | None = None) -> int:
             try_snapshot_external_artifacts(artifact_sync, artifact_paths)
         return 2
 
+    if summary_output_enabled:
+        summary_status = run_summary_workflow(summary_config, mirror_latest=False)
+        if summary_status != 0:
+            if artifact_sync.enabled and artifact_sync.preserve_cache_on_failure:
+                try_snapshot_external_artifacts(artifact_sync, artifact_paths)
+            return summary_status
+
     try:
         export_final_artifacts(artifact_sync, artifact_paths)
     except OSError as exc:
         print(f"Final artifact export failed: {exc}", file=sys.stderr)
         return 2
     mirror_latest_outputs(config)
+    if summary_output_enabled:
+        mirror_latest_summary(root, summary_config.paths)
     cleanup_success_cache(artifact_sync, artifact_paths)
     return 0

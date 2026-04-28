@@ -164,6 +164,11 @@ def _configured_output_files(config: CodexExecConfig) -> frozenset[str]:
     )
 
 
+def _prefix_as_rel(value: str) -> str:
+    rel = _normalize_rel(value)
+    return f"{rel.rstrip('/')}/"
+
+
 def _is_allowed(
     path: str,
     prefixes: Sequence[str],
@@ -215,34 +220,36 @@ def _artifact_files(root: Path) -> frozenset[str]:
     return frozenset(files)
 
 
-def make_file_snapshot(config: CodexExecConfig) -> FileSnapshot:
-    allowed_prefixes = (
-        f"work/runs/{config.run_id}/",
-        f"outputs/{config.run_id}/",
-        "outputs/latest/",
-    )
-    allowed_files = _configured_output_files(config)
+def make_path_snapshot(
+    root: Path,
+    *,
+    allowed_prefixes: Sequence[str],
+    allowed_files: Sequence[str] = (),
+) -> FileSnapshot:
+    root = root.resolve()
+    normalized_prefixes = tuple(_prefix_as_rel(value) for value in allowed_prefixes)
+    normalized_files = frozenset(_normalize_rel(value) for value in allowed_files)
     tracked_hashes: dict[str, str | None] = {}
-    for rel in _tracked_files(config.root):
-        if _is_allowed(rel, allowed_prefixes, allowed_files):
+    for rel in _tracked_files(root):
+        if _is_allowed(rel, normalized_prefixes, normalized_files):
             continue
-        tracked_hashes[rel] = _file_hash(config.root / rel)
+        tracked_hashes[rel] = _file_hash(root / rel)
 
-    untracked_files = _untracked_files(config.root)
+    untracked_files = _untracked_files(root)
     protected_untracked_hashes: dict[str, str | None] = {}
     for rel in untracked_files:
-        if _is_allowed(rel, allowed_prefixes, allowed_files):
+        if _is_allowed(rel, normalized_prefixes, normalized_files):
             continue
-        protected_untracked_hashes[rel] = _file_hash(config.root / rel)
+        protected_untracked_hashes[rel] = _file_hash(root / rel)
 
-    artifact_files = _artifact_files(config.root)
+    artifact_files = _artifact_files(root)
     protected_artifact_hashes: dict[str, str | None] = {}
     for rel in artifact_files:
-        if _is_allowed(rel, allowed_prefixes, allowed_files):
+        if _is_allowed(rel, normalized_prefixes, normalized_files):
             continue
         if rel in tracked_hashes or rel in protected_untracked_hashes:
             continue
-        protected_artifact_hashes[rel] = _file_hash(config.root / rel)
+        protected_artifact_hashes[rel] = _file_hash(root / rel)
 
     return FileSnapshot(
         tracked_hashes=tracked_hashes,
@@ -250,27 +257,55 @@ def make_file_snapshot(config: CodexExecConfig) -> FileSnapshot:
         protected_artifact_hashes=protected_artifact_hashes,
         untracked_files=untracked_files,
         artifact_files=artifact_files,
-        allowed_prefixes=allowed_prefixes,
-        allowed_files=allowed_files,
+        allowed_prefixes=normalized_prefixes,
+        allowed_files=normalized_files,
     )
 
 
-def validate_file_snapshot(config: CodexExecConfig, snapshot: FileSnapshot) -> list[str]:
+def make_file_snapshot(config: CodexExecConfig) -> FileSnapshot:
+    return make_path_snapshot(
+        config.root,
+        allowed_prefixes=(
+            f"work/runs/{config.run_id}/",
+            f"outputs/{config.run_id}/",
+            "outputs/latest/",
+        ),
+        allowed_files=_configured_output_files(config),
+    )
+
+
+def validate_path_snapshot(root: Path, snapshot: FileSnapshot) -> list[str]:
+    root = root.resolve()
     errors: list[str] = []
     for rel, before_hash in snapshot.tracked_hashes.items():
-        after_hash = _file_hash(config.root / rel)
+        after_hash = _file_hash(root / rel)
         if after_hash != before_hash:
             errors.append(f"protected tracked file changed: {rel}")
 
     for rel, before_hash in snapshot.protected_untracked_hashes.items():
-        after_hash = _file_hash(config.root / rel)
+        after_hash = _file_hash(root / rel)
         if after_hash != before_hash:
             errors.append(f"protected untracked file changed: {rel}")
 
     for rel, before_hash in snapshot.protected_artifact_hashes.items():
-        after_hash = _file_hash(config.root / rel)
+        after_hash = _file_hash(root / rel)
         if after_hash != before_hash:
             errors.append(f"protected work/output file changed: {rel}")
+
+    new_untracked = _untracked_files(root) - snapshot.untracked_files
+    for rel in sorted(new_untracked):
+        if not _is_allowed(rel, snapshot.allowed_prefixes, snapshot.allowed_files):
+            errors.append(f"new file outside generated artifact paths: {rel}")
+
+    new_artifact_files = _artifact_files(root) - snapshot.artifact_files
+    for rel in sorted(new_artifact_files):
+        if not _is_allowed(rel, snapshot.allowed_prefixes, snapshot.allowed_files):
+            errors.append(f"new work/output file outside run-scoped paths: {rel}")
+    return errors
+
+
+def validate_file_snapshot(config: CodexExecConfig, snapshot: FileSnapshot) -> list[str]:
+    errors = validate_path_snapshot(config.root, snapshot)
 
     for source_value in [
         config.output,
@@ -283,16 +318,6 @@ def validate_file_snapshot(config: CodexExecConfig, snapshot: FileSnapshot) -> l
             errors.append(
                 f"missing configured output: {_config_path_as_rel(config, source_value)}"
             )
-
-    new_untracked = _untracked_files(config.root) - snapshot.untracked_files
-    for rel in sorted(new_untracked):
-        if not _is_allowed(rel, snapshot.allowed_prefixes, snapshot.allowed_files):
-            errors.append(f"new file outside generated artifact paths: {rel}")
-
-    new_artifact_files = _artifact_files(config.root) - snapshot.artifact_files
-    for rel in sorted(new_artifact_files):
-        if not _is_allowed(rel, snapshot.allowed_prefixes, snapshot.allowed_files):
-            errors.append(f"new work/output file outside run-scoped paths: {rel}")
     return errors
 
 

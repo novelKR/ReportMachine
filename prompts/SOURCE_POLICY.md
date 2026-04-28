@@ -38,5 +38,9 @@ Still prohibited in every article type:
 
 - Images must come from public official sources, public-license sources, or user-provided files.
 - AI-generated images are prohibited in article outputs.
+- AI-generated A4 summary images are allowed only as derivative summary outputs under `outputs/{run_id}/summary/`.
+- Summary images are not evidence sources and do not replace `source_ledger.csv` or `image_ledger.csv`.
+- Summary image generation requests must use Codex internal image generation tools only; runner code must not call OpenAI API endpoints, File Search, vector stores, or external image APIs.
+- Summary images must not introduce factual claims, quantitative values, source attributions, charts, or captions absent from the completed `article.md` and ledgers.
 - Author-created charts are prohibited unless the prompt explicitly allows a rare supply-chain or value-chain schematic exception.
 - Rendered slides must be inspected directly before captions are written.

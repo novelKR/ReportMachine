@@ -44,6 +44,15 @@ Shell network access remains disabled by default. Enable it only for runs that n
 python3 scripts/run_article.py --mode earnings --allow-shell-network
 ```
 
+Derivative A4 summary output is opt-in and runs only after article outputs are complete:
+
+```bash
+python3 scripts/run_article.py --mode industry --summary-output
+python3 scripts/run_summary.py --run-id ai_power_grid_20260428T2027KST
+```
+
+Summary artifacts are written under `outputs/{run_id}/summary/` and are not article outputs, evidence sources, or replacements for `source_ledger.csv` or `image_ledger.csv`. The A4 image request uses Codex internal image generation tools only; the runner does not call OpenAI API endpoints, File Search, vector stores, or external image APIs.
+
 ## Conversational Intake
 
 For short chat-style requests, use `$article-intake` first. The intake skill asks the missing questions, produces an approval plan, and after approval creates run-local inputs under `work/runs/{run_id}/intake/`.
@@ -81,6 +90,8 @@ allowed_domains = ["investor.example.com"]
 
 The default remains repo-local only. OpenAI API key is not required for the runner, and OpenAI File Search/vector-store upload is not used by the runner. Codex usage is limited to the CLI subscription-quota surface: `codex exec`, configured `web_search`, and rendered local images passed with `--image`.
 
+Summary image style is configured inline in TOML under `[profiles.<name>.summary]`, for example `style_name`, `style_prompt`, `negative_prompt`, `paper_size`, `orientation`, and `max_visual_claims`. Separate Markdown style files are not used.
+
 ## TOML Presets And External Artifacts
 
 Use `reportmachine.example.toml` as the tracked preset template. Copy it to `reportmachine.local.toml` for machine-specific paths:
@@ -95,11 +106,12 @@ External artifact roots are runner-only. Codex agents continue to write only rep
 
 ## Release Archive
 
-Before creating a release archive, verify that generated local artifacts are not present:
+Use the source packaging helper when sharing ReportMachine without a Git remote:
 
 ```bash
-python3 scripts/verify_layout.py --release
-git archive --format=zip --output ReportMachine-clean.zip HEAD
+python3 scripts/package_source.py
 ```
 
-Use `git archive` for release zips so ignored local files such as `build/`, `dist/`, `.tmp/`, caches, and generated outputs are not packaged.
+The helper packages Git HEAD into `dist/source/ReportMachine-source-{short_sha}.zip`, extracts the zip into a temporary directory, and runs `python3 scripts/verify_layout.py --release` against the extracted source before publishing the final archive. It fails by default when the working tree has uncommitted changes because those changes are not included in a Git HEAD archive. Pass `--allow-dirty` only when that exclusion is intentional.
+
+Manual `git archive` remains available for low-level use, but the helper is preferred because it validates that ignored local files such as `build/`, `dist/`, `.tmp/`, caches, PyInstaller `*.spec` files, local TOML presets, and generated outputs are not packaged.

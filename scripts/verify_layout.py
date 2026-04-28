@@ -26,6 +26,7 @@ REQUIRED_FILES = [
     ".agents/skills/article-qa/SKILL.md",
     ".agents/skills/article-intake/SKILL.md",
     ".agents/skills/reportmachine-usage/SKILL.md",
+    ".agents/skills/summary-output/SKILL.md",
     "docs/USAGE.ko.md",
     "prompts/PROMPT.md",
     "prompts/FORMAT.md",
@@ -33,9 +34,12 @@ REQUIRED_FILES = [
     "prompts/SOURCE_POLICY.md",
     "prompts/AUTHOR_PROFILE.md",
     "schemas/article_result.schema.json",
+    "schemas/summary_result.schema.json",
     "inputs/topic.md",
     "inputs/sources.csv",
     "scripts/run_article.py",
+    "scripts/run_summary.py",
+    "scripts/package_source.py",
     "src/reportmachine_runner/artifacts.py",
     "src/reportmachine_runner/cli.py",
     "src/reportmachine_runner/config.py",
@@ -43,6 +47,7 @@ REQUIRED_FILES = [
     "src/reportmachine_runner/intake.py",
     "src/reportmachine_runner/prompt.py",
     "src/reportmachine_runner/source_ingest.py",
+    "src/reportmachine_runner/summary.py",
 ]
 
 EXPECTED_SOURCES_HEADER = [
@@ -70,6 +75,10 @@ RELEASE_BLOCKED_DIRS = [
     "dist",
 ]
 
+RELEASE_BLOCKED_TOP_LEVEL_DIR_PREFIXES = [
+    "tmp",
+]
+
 RELEASE_BLOCKED_PATTERNS = [
     "*.spec",
     ".DS_Store",
@@ -92,11 +101,13 @@ API_UPLOAD_GUARDED_FILES = [
     "src/reportmachine_runner/prompt.py",
     "src/reportmachine_runner/intake.py",
     "src/reportmachine_runner/source_ingest.py",
+    "src/reportmachine_runner/summary.py",
 ]
 
 FORBIDDEN_PAID_API_SNIPPETS = [
     "/v1/responses",
     "/v1/files",
+    "/v1/images",
     "vector_store",
     "vector_stores",
     "OpenAI(",
@@ -163,6 +174,15 @@ def check_release_cleanliness(root: Path, errors: list[str]) -> None:
     for rel in RELEASE_BLOCKED_DIRS:
         if (root / rel).exists():
             errors.append(f"release-blocked generated directory exists: {rel}")
+    for path in root.iterdir():
+        if not path.is_dir():
+            continue
+        if any(
+            path.name.startswith(prefix)
+            for prefix in RELEASE_BLOCKED_TOP_LEVEL_DIR_PREFIXES
+        ):
+            blocked_dir_parts.add(path.name)
+            errors.append(f"release-blocked generated directory exists: {path.name}")
 
     for pattern in RELEASE_BLOCKED_PATTERNS:
         for path in root.rglob(pattern):
@@ -242,10 +262,28 @@ def main() -> int:
             "--config reportmachine.example.toml --profile default --smoke-test",
             "$article-intake",
             "--prepare-only",
+            "--summary-output",
             "App-native fallback",
             "External artifact roots are runner-only",
             "OpenAI API key is not required",
             "OpenAI File Search/vector-store upload is not used by the runner",
+            "Codex internal image generation tools only",
+            "python3 scripts/package_source.py",
+            "Git HEAD",
+            "--allow-dirty",
+        ],
+    )
+
+    usage_text = (root / "docs/USAGE.ko.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "docs/USAGE.ko.md",
+        usage_text,
+        [
+            "Git 없이 zip",
+            "python3 scripts/package_source.py",
+            "unzip ReportMachine-source-",
+            "--allow-dirty",
         ],
     )
 
@@ -258,8 +296,10 @@ def main() -> int:
             "$reportmachine-usage",
             "docs/USAGE.ko.md",
             "$article-intake",
+            "$summary-output",
             "App-native fallback exception",
             "schemas/article_result.schema.json",
+            "schemas/summary_result.schema.json",
         ],
     )
 
@@ -272,6 +312,20 @@ def main() -> int:
     if '"openai_file_search": "disabled"' not in source_ingest_text:
         errors.append("source ingest manifest must keep openai_file_search disabled")
 
+    summary_text = (root / "src/reportmachine_runner/summary.py").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "src/reportmachine_runner/summary.py",
+        summary_text,
+        [
+            "Use $summary-output.",
+            "Codex internal image generation tools only",
+            "Do not call OpenAI API endpoints, File Search, vector stores",
+            "summary_a4.png",
+            "summary_claim_map.csv",
+        ],
+    )
+
     prompt_text = (root / "src/reportmachine_runner/prompt.py").read_text(encoding="utf-8")
     require_snippets(
         errors,
@@ -280,6 +334,18 @@ def main() -> int:
         [
             "OpenAI API/File Search/vector store uploads are disabled",
             "openai_file_search = disabled",
+        ],
+    )
+
+    source_policy_text = (root / "prompts/SOURCE_POLICY.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "prompts/SOURCE_POLICY.md",
+        source_policy_text,
+        [
+            "AI-generated images are prohibited in article outputs",
+            "AI-generated A4 summary images are allowed only as derivative summary outputs",
+            "Codex internal image generation tools only",
         ],
     )
 

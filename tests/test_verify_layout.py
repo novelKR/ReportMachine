@@ -82,6 +82,18 @@ class VerifyLayoutReleaseTests(unittest.TestCase):
                 errors,
             )
 
+    def test_release_blocks_top_level_temp_dirs_with_nested_generated_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_file(root, "tmpdeiyglce/outputs/test_run/summary/summary_claim_map.csv")
+
+            errors = self.collect_release_errors(root)
+
+            self.assertIn(
+                "release-blocked generated directory exists: tmpdeiyglce",
+                errors,
+            )
+
     def test_release_blocks_run_scoped_work_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

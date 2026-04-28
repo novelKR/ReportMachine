@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "summary_type": {
+      "type": "string",
+      "enum": ["a4_visual"]
+    },
+    "source_article": {
+      "type": "string"
+    },
+    "source_article_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_result": {
+      "type": "string"
+    },
+    "source_result_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "image_generation_surface": {
+      "type": "string",
+      "const": "codex_internal_tool"
+    },
+    "output_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "summary_a4_png": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/summary/summary_a4\\.png$"
+        },
+        "summary_prompt_md": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/summary/summary_prompt\\.md$"
+        },
+        "summary_claim_map_csv": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/summary/summary_claim_map\\.csv$"
+        },
+        "summary_manifest_json": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/summary/summary_manifest\\.json$"
+        }
+      },
+      "required": [
+        "summary_a4_png",
+        "summary_prompt_md",
+        "summary_claim_map_csv",
+        "summary_manifest_json"
+      ]
+    },
+    "critical_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checklist_status": {
+      "type": "string",
+      "enum": ["pass", "pass_with_warnings", "fail"]
+    }
+  },
+  "required": [
+    "summary_type",
+    "source_article",
+    "source_article_sha256",
+    "source_result",
+    "source_result_sha256",
+    "image_generation_surface",
+    "output_files",
+    "critical_warnings",
+    "checklist_status"
+  ]
+}

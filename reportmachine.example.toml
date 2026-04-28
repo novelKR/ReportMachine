@@ -15,6 +15,23 @@ pdf_render_dpi = 144
 max_pdf_pages = 40
 max_image_inputs = 20
 
+[profiles.default.summary]
+enabled = false
+image_generation_surface = "codex_internal_tool"
+paper_size = "A4"
+orientation = "portrait"
+language = "ko"
+style_name = "clean_editorial_korean_report"
+style_prompt = """
+한국어 산업 분석 리포트용 A4 세로 요약 이미지.
+차분한 editorial report 스타일, 높은 가독성, 과장된 투자 홍보 느낌 금지.
+"""
+negative_prompt = """
+투자 추천, 주가 전망, 과도한 3D 그래픽, 장식적 로고 콜라주, 읽기 어려운 작은 글씨 금지.
+"""
+max_visual_claims = 6
+require_source_footer = true
+
 # Copy this file to reportmachine.local.toml for machine-specific artifact roots.
 # External artifact roots are used only by the runner. They are not exposed to Codex prompts.
 #
@@ -41,3 +58,20 @@ max_download_bytes = 52428800
 pdf_render_dpi = 144
 max_pdf_pages = 40
 max_image_inputs = 20
+
+[profiles.earnings.summary]
+enabled = false
+image_generation_surface = "codex_internal_tool"
+paper_size = "A4"
+orientation = "portrait"
+language = "ko"
+style_name = "clean_editorial_korean_report"
+style_prompt = """
+한국어 실적/IR 분석 리포트용 A4 세로 요약 이미지.
+차분한 editorial report 스타일, 높은 가독성, 과장된 투자 홍보 느낌 금지.
+"""
+negative_prompt = """
+투자 추천, 목표주가, 매수/매도 의견, 과도한 3D 그래픽, 읽기 어려운 작은 글씨 금지.
+"""
+max_visual_claims = 6
+require_source_footer = true

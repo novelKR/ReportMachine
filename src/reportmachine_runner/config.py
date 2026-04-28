@@ -13,6 +13,7 @@ PROFILE_KEYS = {
     "web_search",
     "allow_shell_network",
     "source_ingest",
+    "summary",
     "run_id_prefix",
     "artifacts",
 }
@@ -31,6 +32,20 @@ ARTIFACT_KEYS = {
     "cleanup_cache_on_success",
     "preserve_cache_on_failure",
 }
+SUMMARY_KEYS = {
+    "enabled",
+    "image_generation_surface",
+    "paper_size",
+    "orientation",
+    "language",
+    "style_name",
+    "style_prompt",
+    "negative_prompt",
+    "max_visual_claims",
+    "require_source_footer",
+}
+
+SUMMARY_IMAGE_GENERATION_SURFACE = "codex_internal_tool"
 
 
 @dataclass(frozen=True)
@@ -53,6 +68,20 @@ class SourceIngestProfile:
 
 
 @dataclass(frozen=True)
+class SummaryProfile:
+    enabled: bool = False
+    image_generation_surface: str = SUMMARY_IMAGE_GENERATION_SURFACE
+    paper_size: str = "A4"
+    orientation: str = "portrait"
+    language: str = "ko"
+    style_name: str = "clean_editorial_korean_report"
+    style_prompt: str = "Clean editorial A4 Korean industry report summary image."
+    negative_prompt: str = "No investment recommendations, price forecasts, unreadable tiny text, or decorative logo collages."
+    max_visual_claims: int = 6
+    require_source_footer: bool = True
+
+
+@dataclass(frozen=True)
 class RunnerProfile:
     mode: str | None = None
     topic: str | None = None
@@ -61,6 +90,7 @@ class RunnerProfile:
     web_search: str | None = None
     allow_shell_network: bool | None = None
     source_ingest: SourceIngestProfile = SourceIngestProfile()
+    summary: SummaryProfile = SummaryProfile()
     run_id_prefix: str | None = None
     artifacts: ArtifactProfile = ArtifactProfile()
 
@@ -115,6 +145,16 @@ def _optional_non_negative_int(value: Any, label: str) -> int | None:
     if not isinstance(value, int) or isinstance(value, bool) or value < 0:
         raise ValueError(f"{label} must be a non-negative integer")
     return value
+
+
+def _string(value: Any, label: str, default: str) -> str:
+    parsed = _optional_string(value, label)
+    return default if parsed is None else parsed
+
+
+def _non_negative_int(value: Any, label: str, default: int) -> int:
+    parsed = _optional_non_negative_int(value, label)
+    return default if parsed is None else parsed
 
 
 def _optional_string_tuple(value: Any, label: str) -> tuple[str, ...]:
@@ -181,6 +221,15 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
         SOURCE_INGEST_KEYS,
         f"profiles.{profile_name}.source_ingest",
     )
+    summary_table = _require_mapping(
+        profile.get("summary", {}),
+        f"profiles.{profile_name}.summary",
+    )
+    _validate_keys(
+        summary_table,
+        SUMMARY_KEYS,
+        f"profiles.{profile_name}.summary",
+    )
 
     artifacts = ArtifactProfile(
         external_root=_optional_string(
@@ -233,6 +282,63 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
             f"profiles.{profile_name}.source_ingest.max_image_inputs",
         ),
     )
+    summary = SummaryProfile(
+        enabled=_bool(
+            summary_table.get("enabled"),
+            f"profiles.{profile_name}.summary.enabled",
+            False,
+        ),
+        image_generation_surface=_string(
+            summary_table.get("image_generation_surface"),
+            f"profiles.{profile_name}.summary.image_generation_surface",
+            SUMMARY_IMAGE_GENERATION_SURFACE,
+        ),
+        paper_size=_string(
+            summary_table.get("paper_size"),
+            f"profiles.{profile_name}.summary.paper_size",
+            "A4",
+        ),
+        orientation=_string(
+            summary_table.get("orientation"),
+            f"profiles.{profile_name}.summary.orientation",
+            "portrait",
+        ),
+        language=_string(
+            summary_table.get("language"),
+            f"profiles.{profile_name}.summary.language",
+            "ko",
+        ),
+        style_name=_string(
+            summary_table.get("style_name"),
+            f"profiles.{profile_name}.summary.style_name",
+            "clean_editorial_korean_report",
+        ),
+        style_prompt=_string(
+            summary_table.get("style_prompt"),
+            f"profiles.{profile_name}.summary.style_prompt",
+            "Clean editorial A4 Korean industry report summary image.",
+        ),
+        negative_prompt=_string(
+            summary_table.get("negative_prompt"),
+            f"profiles.{profile_name}.summary.negative_prompt",
+            "No investment recommendations, price forecasts, unreadable tiny text, or decorative logo collages.",
+        ),
+        max_visual_claims=_non_negative_int(
+            summary_table.get("max_visual_claims"),
+            f"profiles.{profile_name}.summary.max_visual_claims",
+            6,
+        ),
+        require_source_footer=_bool(
+            summary_table.get("require_source_footer"),
+            f"profiles.{profile_name}.summary.require_source_footer",
+            True,
+        ),
+    )
+    if summary.image_generation_surface != SUMMARY_IMAGE_GENERATION_SURFACE:
+        raise ValueError(
+            "profiles."
+            f"{profile_name}.summary.image_generation_surface must be {SUMMARY_IMAGE_GENERATION_SURFACE!r}"
+        )
 
     return RunnerProfile(
         mode=_optional_string(profile.get("mode"), f"profiles.{profile_name}.mode"),
@@ -248,6 +354,7 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
             f"profiles.{profile_name}.allow_shell_network",
         ),
         source_ingest=source_ingest,
+        summary=summary,
         run_id_prefix=_optional_string(
             profile.get("run_id_prefix"),
             f"profiles.{profile_name}.run_id_prefix",
