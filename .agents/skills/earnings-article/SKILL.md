@@ -37,6 +37,8 @@ If `prompts/EARNINGS_PROMPT.md` conflicts with a general rule, the earnings-spec
 - IR frame and counter-reading.
 - Five-axis scorecard draft and rationale.
 - Image or slide ledger when applicable.
+- File artifacts, when requested, must stay under `work/runs/{run_id}/...` until the parent writes final outputs under `outputs/{run_id}/...`.
+- `outputs/{run_id}/article_result.json` is produced only by the Codex CLI `-o` final-message output path.
 
 ## Hard Rules
 

@@ -1,1 +1,1 @@
-source_title,issuer,date,url,source_tier,notes
+source_id,article_type,company,period_role,doc_kind,issuer,date,title,url,required,notes

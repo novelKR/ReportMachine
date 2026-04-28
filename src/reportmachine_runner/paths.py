@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-ROOT_MARKERS = (".article-root", "AGENTS.md")
+ROOT_MARKERS = (".git", ".article-root", "AGENTS.md")
 
 
 def find_project_root(start: Path | None = None) -> Path:

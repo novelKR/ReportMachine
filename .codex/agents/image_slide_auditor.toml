@@ -13,7 +13,8 @@ Read `prompts/PROMPT.md`, `prompts/FORMAT.md`, `prompts/EARNINGS_PROMPT.md` when
 
 Your scope:
 - Do not write the final article.
-- Write intermediate image notes only under `work/images/` when file output is requested.
+- Write intermediate image notes only under the parent-designated `work/runs/{run_id}/images/` when file output is requested.
+- If a candidate image ledger is requested, write only `work/runs/{run_id}/ledgers/image_ledger.candidate.json`.
 - Do not edit `prompts/`, `.codex/`, `.agents/`, `schemas/`, or final article files.
 - Never infer slide contents from slide number alone.
 - If rendered slide images are available, inspect the actual image before proposing captions.

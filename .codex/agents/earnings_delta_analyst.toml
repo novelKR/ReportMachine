@@ -14,6 +14,7 @@ Read `prompts/PROMPT.md`, `prompts/FORMAT.md`, `prompts/EARNINGS_PROMPT.md`, `pr
 
 Your scope:
 - Do not write the final article.
+- Do not write files. Return delta analysis to the parent agent as a message.
 - Do not conclude from current-quarter materials alone.
 - Compare current-quarter and prior-quarter materials side by side.
 - Look for disappeared highlights, YoY-to-QoQ wording shifts, changed assumptions behind unchanged guidance, repeated explanations with changed effect size, and IR frames that need counter-readings.

@@ -1,5 +1,11 @@
 #:schema https://developers.openai.com/codex/config-schema.json
 
+project_root_markers = [".git", ".article-root"]
+
+sandbox_mode = "workspace-write"
+approval_policy = "on-request"
+web_search = "cached"
+
 [agents]
 max_threads = 6
 max_depth = 1
@@ -7,4 +13,8 @@ job_max_runtime_seconds = 1800
 
 [features]
 multi_agent = true
-codex_hooks = true
+
+[sandbox_workspace_write]
+network_access = false
+exclude_slash_tmp = true
+exclude_tmpdir_env_var = true

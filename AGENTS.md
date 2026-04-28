@@ -15,13 +15,13 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
   - Use `$article-qa`.
 - Preview articles:
   - Do not treat preview requests as ordinary industry analysis.
-  - If `prompts/PREVIEW_PROMPT.md` is absent, stop and report that the preview-specific prompt contract is missing.
+  - If `prompts/PREVIEW_PROMPT.md` is absent, return a schema-valid failure JSON with `article_type = "preview"`, `checklist_status = "fail"`, and a `critical_warnings` entry that the preview-specific prompt contract is missing.
 
 ## Main Agent Duties
 
 - Classify the task type before drafting.
 - Spawn sub agents aggressively for automated report generation, research planning, earnings review, evidence validation, image or slide validation, and prompt compliance review.
-- Keep sub agents focused on intermediate artifacts. The main agent owns final conflict resolution and final response synthesis.
+- Keep sub agents focused on intermediate analysis. Read-only sub agents must return results to the parent agent as messages rather than writing files. The main agent owns final conflict resolution and final response synthesis.
 - Do not let multiple agents write the same final file concurrently.
 
 ## Required Sub Agent Flow
@@ -44,9 +44,11 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
 ## Artifact Paths
 
 - Inputs: `inputs/topic.md`, `inputs/sources.csv`
-- Intermediate artifacts: `work/research/`, `work/ledgers/`, `work/images/`, `work/drafts/`
-- Final artifacts: `outputs/article.md`, `outputs/article_result.json`, `outputs/source_ledger.csv`, `outputs/image_ledger.csv`
-- Generated artifacts must stay under `work/` or `outputs/` unless the user explicitly asks for repo configuration edits.
+- Intermediate artifacts: `work/runs/{run_id}/research/`, `work/runs/{run_id}/ledgers/`, `work/runs/{run_id}/images/`, `work/runs/{run_id}/drafts/`, `work/runs/{run_id}/reviews/`
+- Final artifacts: `outputs/{run_id}/article.md`, `outputs/{run_id}/source_ledger.csv`, `outputs/{run_id}/image_ledger.csv`
+- Structured result: `outputs/{run_id}/article_result.json` is written only by `codex exec -o` from the final assistant message, not directly by an agent.
+- Latest mirror: after a successful, validated run, `outputs/latest/` may be updated from `outputs/{run_id}/`.
+- Generated artifacts must stay under `work/runs/{run_id}/`, `outputs/{run_id}/`, or `outputs/latest/` unless the user explicitly asks for repo configuration edits.
 
 ## Safety And Quality Rules
 

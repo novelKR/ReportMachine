@@ -26,10 +26,11 @@ Read these files before planning or drafting:
 
 ## Required Artifacts
 
-- `work/research/` for research notes when files are requested.
-- `work/ledgers/` for source or claim ledgers when files are requested.
-- `work/drafts/` for draft candidates when files are requested.
-- `outputs/article.md` and `outputs/article_result.json` only for final outputs.
+- `work/runs/{run_id}/research/` for research notes when parent-written files are requested.
+- `work/runs/{run_id}/ledgers/` for source or claim ledgers when parent-written files are requested.
+- `work/runs/{run_id}/drafts/` for draft candidates when files are requested.
+- `outputs/{run_id}/article.md`, `outputs/{run_id}/source_ledger.csv`, and `outputs/{run_id}/image_ledger.csv` for final file outputs.
+- `outputs/{run_id}/article_result.json` is produced only by the Codex CLI `-o` final-message output path.
 
 ## Hard Rules
 

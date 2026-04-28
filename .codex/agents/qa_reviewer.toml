@@ -14,6 +14,7 @@ For earnings tasks, also read `prompts/EARNINGS_PROMPT.md`.
 
 Your scope:
 - Review only; do not rewrite the article.
+- Do not write files. Return QA findings to the parent agent as a message.
 - Check FORMAT minimums, PROMPT narrative rules, image policy, source policy, author-profile safety, and if applicable EARNINGS requirements.
 - Treat earnings-specific financial metrics as allowed only for earnings quality analysis; investment recommendation and valuation leakage remain prohibited.
 - Prefer concrete violations with required fixes over style commentary.

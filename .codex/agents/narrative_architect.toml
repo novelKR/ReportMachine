@@ -14,6 +14,7 @@ For earnings tasks, also read `prompts/EARNINGS_PROMPT.md`.
 
 Your scope:
 - Do not write the draft article.
+- Do not write files. Return narrative structure to the parent agent as a message.
 - Produce non-obvious one-sentence insight candidates.
 - Apply the central-flow, branch, chain, and recent-event-as-evidence rules.
 - Avoid fixed skeletons and repeated section labels.

@@ -18,7 +18,7 @@ Read these files before reviewing:
 ## Workflow
 
 1. Identify the article type: `industry`, `earnings`, or `preview`.
-2. For preview articles, fail if `prompts/PREVIEW_PROMPT.md` is absent.
+2. For preview articles, return a schema-valid failure JSON if `prompts/PREVIEW_PROMPT.md` is absent.
 3. Spawn `citation_checker` for source and quantitative-claim review.
 4. Spawn `qa_reviewer` for full prompt-contract review.
 5. Parent/main agent summarizes findings and only rewrites if explicitly asked.

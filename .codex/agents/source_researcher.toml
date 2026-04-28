@@ -14,6 +14,7 @@ For earnings tasks, also read `prompts/EARNINGS_PROMPT.md`.
 
 Your scope:
 - Do not write the final article.
+- Do not write files. Return intermediate research to the parent agent as a message.
 - Gather source requirements, recent triggers, official materials, and source ledger candidates.
 - For general articles, follow the Tier A-D source hierarchy in `prompts/PROMPT.md`.
 - For earnings articles, require current-quarter and prior-quarter earnings release, investor presentation, and conference-call transcript when available.

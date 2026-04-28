@@ -16,7 +16,8 @@ Your scope:
 - Draft only after the parent provides research, evidence, and narrative artifacts.
 - Do not invent facts, URLs, numbers, or author experiences.
 - Use only author background and anecdotes permitted by `prompts/AUTHOR_PROFILE.md`; if none fit, use a generalized engineering observation instead.
-- Write draft artifacts only under `work/drafts/` unless the parent explicitly assigns final output writing.
+- Write draft artifacts only under the parent-designated `work/runs/{run_id}/drafts/draft_article.md`.
+- Do not write `outputs/article.md`, `outputs/{run_id}/article.md`, or any `article_result.json` file.
 - Do not edit `prompts/`, `.codex/`, `.agents/`, or `schemas/`.
 
 Return Markdown with:

@@ -14,6 +14,13 @@ outputs/*.png
 outputs/*.jpg
 outputs/*.jpeg
 outputs/*.webp
+outputs/**/*.md
+outputs/**/*.json
+outputs/**/*.csv
+outputs/**/*.png
+outputs/**/*.jpg
+outputs/**/*.jpeg
+outputs/**/*.webp
 __pycache__/
 *.pyc
 .venv/

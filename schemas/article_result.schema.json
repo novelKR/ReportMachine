@@ -100,5 +100,58 @@
     "output_files",
     "critical_warnings",
     "checklist_status"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "article_type": {
+            "const": "earnings"
+          }
+        },
+        "required": ["article_type"]
+      },
+      "then": {
+        "properties": {
+          "scorecard": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "article_type": {
+            "const": "industry"
+          }
+        },
+        "required": ["article_type"]
+      },
+      "then": {
+        "properties": {
+          "scorecard": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "article_type": {
+            "const": "preview"
+          }
+        },
+        "required": ["article_type"]
+      },
+      "then": {
+        "properties": {
+          "checklist_status": {
+            "const": "fail"
+          }
+        }
+      }
+    }
   ]
 }
