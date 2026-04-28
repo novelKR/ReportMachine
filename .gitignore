@@ -1,6 +1,7 @@
 .codex-home/
 reportmachine.local.toml
 .tmp/
+work/runs/
 work/**/*.md
 work/**/*.json
 work/**/*.csv
@@ -22,6 +23,8 @@ outputs/**/*.png
 outputs/**/*.jpg
 outputs/**/*.jpeg
 outputs/**/*.webp
+outputs/*
+!outputs/.gitkeep
 __pycache__/
 *.pyc
 .venv/
