@@ -13,7 +13,7 @@ dependencies = []
 
 [project.optional-dependencies]
 build = ["pyinstaller>=6.0"]
-dev = ["pyinstaller>=6.0"]
+dev = ["jsonschema>=4.0", "pyinstaller>=6.0"]
 
 [project.scripts]
 reportmachine-runner = "reportmachine_runner.cli:main"

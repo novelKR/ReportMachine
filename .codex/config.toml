@@ -5,6 +5,7 @@ project_root_markers = [".git", ".article-root"]
 sandbox_mode = "workspace-write"
 approval_policy = "on-request"
 web_search = "cached"
+allow_login_shell = false
 
 [agents]
 max_threads = 6
@@ -18,3 +19,6 @@ multi_agent = true
 network_access = false
 exclude_slash_tmp = true
 exclude_tmpdir_env_var = true
+
+[windows]
+sandbox = "elevated"

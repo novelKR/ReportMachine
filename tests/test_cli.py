@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import subprocess
 import tempfile
 import unittest
@@ -10,13 +11,21 @@ from unittest.mock import patch
 
 from reportmachine_runner import cli
 
+try:
+    from jsonschema import Draft202012Validator
+except ModuleNotFoundError:
+    Draft202012Validator = None
+
 
 class CliDryRunTests(unittest.TestCase):
     def run_cli(self, argv: list[str]) -> tuple[int, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
         with redirect_stdout(stdout), redirect_stderr(stderr):
-            status = cli.main(argv)
+            try:
+                status = cli.main(argv)
+            except SystemExit as exc:
+                status = exc.code if isinstance(exc.code, int) else 1
         return status, stdout.getvalue() + stderr.getvalue()
 
     def init_git_root(self, temp_dir: str) -> Path:
@@ -72,7 +81,7 @@ class CliDryRunTests(unittest.TestCase):
             self.assertIn("command:", output)
             self.assertIn("outputs/test_run/article_result.json", output)
             self.assertIn("outputs/test_run/article.md", output)
-            self.assertIn('web_search="live"', output)
+            self.assertIn('web_search="cached"', output)
             self.assertIn("prompt:", output)
             self.assertFalse(root.exists())
             self.assertFalse((root / "outputs").exists())
@@ -192,6 +201,7 @@ class CliDryRunTests(unittest.TestCase):
             self.assertIn("outputs/test_run/article_result.json", command)
             self.assertIn('project_root_markers=[".git",".article-root"]', command)
             self.assertIn('web_search="live"', command)
+            self.assertNotIn("--full-auto", command)
             self.assertNotIn("sandbox_workspace_write.network_access=true", command)
             prompt = command[-1]
             self.assertIn("Run id: `test_run`.", prompt)
@@ -218,6 +228,104 @@ class CliDryRunTests(unittest.TestCase):
             self.assertEqual(status, 7)
             command = run_command.call_args.args[0]
             self.assertIn("sandbox_workspace_write.network_access=true", command)
+
+    def test_industry_defaults_to_cached_web_search(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            argv = [
+                "--mode",
+                "industry",
+                "--run-id",
+                "test_run",
+                "--project-root",
+                str(root),
+            ]
+
+            with patch("reportmachine_runner.cli.run_command", return_value=7) as run_command:
+                status, _ = self.run_cli(argv)
+
+            self.assertEqual(status, 7)
+            command = run_command.call_args.args[0]
+            self.assertIn('web_search="cached"', command)
+            self.assertNotIn('web_search="live"', command)
+
+    def test_web_search_can_be_disabled_explicitly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            argv = [
+                "--mode",
+                "earnings",
+                "--run-id",
+                "test_run",
+                "--project-root",
+                str(root),
+                "--web-search",
+                "disabled",
+            ]
+
+            with patch("reportmachine_runner.cli.run_command", return_value=7) as run_command:
+                status, _ = self.run_cli(argv)
+
+            self.assertEqual(status, 7)
+            command = run_command.call_args.args[0]
+            self.assertIn('web_search="disabled"', command)
+            self.assertNotIn('web_search="live"', command)
+
+    def test_output_path_must_stay_under_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            cases = [
+                (str(Path(temp_dir) / "outside.json"), "Absolute paths are not allowed"),
+                ("C:\\temp\\outside.json", "Windows drive paths are not allowed"),
+                ("../outside.json", "Path escapes project root"),
+            ]
+            for value, expected in cases:
+                with self.subTest(value=value):
+                    status, output = self.run_cli(
+                        [
+                            "--mode",
+                            "industry",
+                            "--run-id",
+                            "test_run",
+                            "--project-root",
+                            str(root),
+                            "--output",
+                            value,
+                            "--dry-run",
+                        ]
+                    )
+
+                    self.assertEqual(status, 2)
+                    self.assertIn(expected, output)
+
+    @unittest.skipIf(Draft202012Validator is None, "jsonschema is not installed")
+    def test_article_result_schema_rejects_successful_earnings_without_scorecard(self) -> None:
+        schema_path = (
+            Path(__file__).resolve().parents[1]
+            / "schemas"
+            / "article_result.schema.json"
+        )
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        validator = Draft202012Validator(schema)
+        for checklist_status in ["pass", "pass_with_warnings"]:
+            with self.subTest(checklist_status=checklist_status):
+                payload = {
+                    "article_type": "earnings",
+                    "title": "Example",
+                    "subtitle": "Example",
+                    "one_sentence_insight": "Example",
+                    "scorecard": None,
+                    "output_files": {
+                        "article_md": "outputs/test_run/article.md",
+                        "source_ledger_csv": "outputs/test_run/source_ledger.csv",
+                        "image_ledger_csv": "outputs/test_run/image_ledger.csv",
+                    },
+                    "critical_warnings": [],
+                    "checklist_status": checklist_status,
+                }
+
+                errors = list(validator.iter_errors(payload))
+                self.assertTrue(errors)
 
     def test_successful_run_mirrors_outputs_to_latest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

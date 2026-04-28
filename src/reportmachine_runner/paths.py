@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 ROOT_MARKERS = (".git", ".article-root", "AGENTS.md")
 
@@ -21,10 +21,24 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 def resolve_under_root(root: Path, value: str) -> Path:
+    if not value:
+        raise ValueError("Path value must not be empty")
+
+    windows_path = PureWindowsPath(value)
+    if windows_path.drive:
+        raise ValueError(f"Windows drive paths are not allowed: {value}")
+
+    root = root.expanduser().resolve()
     path = Path(value).expanduser()
     if path.is_absolute():
-        return path
-    return root / path
+        raise ValueError(f"Absolute paths are not allowed: {value}")
+
+    resolved = (root / path).resolve()
+    try:
+        resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"Path escapes project root: {value}") from exc
+    return resolved
 
 
 def as_posix_arg(value: str) -> str:

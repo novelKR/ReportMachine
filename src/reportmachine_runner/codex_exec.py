@@ -26,7 +26,7 @@ class CodexExecConfig:
     image_notes_dir: str
     image_ledger_candidate: str
     latest_dir: str
-    live_web_search: bool
+    web_search: str
     allow_shell_network: bool
     prompt: str
 
@@ -53,16 +53,15 @@ def build_command(config: CodexExecConfig) -> list[str]:
         "-C",
         str(config.root),
         "--skip-git-repo-check",
-        "--full-auto",
         "--output-schema",
         config.schema,
         "-o",
         config.output,
         "-c",
         'project_root_markers=[".git",".article-root"]',
+        "-c",
+        f'web_search="{config.web_search}"',
     ]
-    if config.live_web_search:
-        command.extend(["-c", 'web_search="live"'])
     if config.allow_shell_network:
         command.extend(["-c", "sandbox_workspace_write.network_access=true"])
     command.append(config.prompt)

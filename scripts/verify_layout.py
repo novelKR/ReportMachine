@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 from pathlib import Path
@@ -41,14 +42,49 @@ EXPECTED_SOURCES_HEADER = [
     "article_type",
     "company",
     "period_role",
+    "period",
     "doc_kind",
     "issuer",
     "date",
     "title",
     "url",
+    "source_tier",
     "required",
+    "local_path",
     "notes",
 ]
+
+RELEASE_BLOCKED_DIRS = [
+    ".tmp",
+    ".venv",
+    "__MACOSX",
+    "build",
+    "dist",
+]
+
+RELEASE_BLOCKED_PATTERNS = [
+    "*.spec",
+    ".DS_Store",
+    "__pycache__",
+]
+
+RELEASE_ARTIFACT_DIRS = [
+    "outputs",
+    "work",
+]
+
+RELEASE_ALLOWED_ARTIFACT_NAMES = {
+    ".gitkeep",
+}
+
+
+def is_top_level_release_excluded_path(
+    relative_parts: tuple[str, ...],
+    blocked_dir_parts: set[str],
+) -> bool:
+    return bool(relative_parts) and (
+        relative_parts[0] == ".git" or relative_parts[0] in blocked_dir_parts
+    )
 
 
 def require_snippets(errors: list[str], rel: str, text: str, snippets: list[str]) -> None:
@@ -83,7 +119,51 @@ def schema_has_earnings_scorecard_rule(
     return False
 
 
+def check_release_cleanliness(root: Path, errors: list[str]) -> None:
+    blocked_dir_parts = set(RELEASE_BLOCKED_DIRS)
+    reported_artifacts: set[str] = set()
+    for rel in RELEASE_BLOCKED_DIRS:
+        if (root / rel).exists():
+            errors.append(f"release-blocked generated directory exists: {rel}")
+
+    for pattern in RELEASE_BLOCKED_PATTERNS:
+        for path in root.rglob(pattern):
+            relative_parts = path.relative_to(root).parts
+            if is_top_level_release_excluded_path(relative_parts, blocked_dir_parts):
+                continue
+            rel = path.relative_to(root).as_posix()
+            reported_artifacts.add(rel)
+            errors.append(f"release-blocked generated artifact exists: {rel}")
+
+    for artifact_dir in RELEASE_ARTIFACT_DIRS:
+        base = root / artifact_dir
+        if not base.exists():
+            continue
+        for path in base.rglob("*"):
+            if not path.is_file() or path.name in RELEASE_ALLOWED_ARTIFACT_NAMES:
+                continue
+            relative_parts = path.relative_to(root).parts
+            if is_top_level_release_excluded_path(relative_parts, blocked_dir_parts):
+                continue
+            rel = path.relative_to(root).as_posix()
+            if rel in reported_artifacts:
+                continue
+            reported_artifacts.add(rel)
+            if artifact_dir == "outputs" and path.parent == base and path.suffix == ".json":
+                errors.append(f"release-blocked root output JSON exists: {rel}")
+            else:
+                errors.append(f"release-blocked generated artifact exists: {rel}")
+
+
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Verify the ReportMachine repository layout.")
+    parser.add_argument(
+        "--release",
+        action="store_true",
+        help="Also fail on generated artifacts that must not be included in release archives.",
+    )
+    args = parser.parse_args()
+
     root = Path(__file__).resolve().parents[1]
     errors: list[str] = []
 
@@ -95,12 +175,18 @@ def main() -> int:
     for required in [
         'project_root_markers = [".git", ".article-root"]',
         'web_search = "cached"',
+        "allow_login_shell = false",
         "network_access = false",
+        'sandbox = "elevated"',
     ]:
         if required not in config_text:
             errors.append(f"missing config setting: {required}")
     if "codex_hooks = true" in config_text:
         errors.append("codex_hooks must stay disabled until real hooks are configured")
+
+    codex_exec_text = (root / "src/reportmachine_runner/codex_exec.py").read_text(encoding="utf-8")
+    if "--full-auto" in codex_exec_text:
+        errors.append("runner command must not use --full-auto")
 
     with (root / "inputs/sources.csv").open(newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)
@@ -161,6 +247,9 @@ def main() -> int:
             "If fewer than two disappeared highlights are found",
         ],
     )
+
+    if args.release:
+        check_release_cleanliness(root, errors)
 
     if errors:
         print("Layout verification failed:")

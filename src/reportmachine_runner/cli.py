@@ -17,10 +17,15 @@ from .codex_exec import (
     validate_file_snapshot,
 )
 from .paths import as_posix_arg, find_project_root
+from .paths import resolve_under_root
 from .prompt import build_prompt
 
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+WEB_SEARCH_DEFAULTS = {
+    "industry": "cached",
+    "earnings": "live",
+}
 
 
 def default_run_id() -> str:
@@ -40,10 +45,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--source-ledger-output", help="Source ledger path. Defaults to outputs/{run_id}/source_ledger.csv.")
     parser.add_argument("--image-ledger-output", help="Image ledger path. Defaults to outputs/{run_id}/image_ledger.csv.")
     parser.add_argument("--codex-bin", default="codex")
+    parser.add_argument(
+        "--web-search",
+        choices=["cached", "live", "disabled"],
+        help="Codex web search mode. Defaults to cached for industry and live for earnings.",
+    )
     parser.add_argument("--allow-shell-network", action="store_true", help="Allow shell outbound network in the Codex workspace-write sandbox for this run.")
     parser.add_argument("--dry-run", action="store_true", help="Print the command and prompt without running Codex.")
     parser.add_argument("--smoke-test", action="store_true", help="Build the command and prompt without creating directories or running Codex.")
     return parser
+
+
+def resolve_repo_arg(parser: argparse.ArgumentParser, root: Path, value: str, label: str) -> str:
+    try:
+        resolved = resolve_under_root(root, value)
+        return resolved.relative_to(root.resolve()).as_posix()
+    except ValueError as exc:
+        parser.error(f"{label}: {exc}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -64,12 +82,25 @@ def main(argv: Sequence[str] | None = None) -> int:
     article_output = args.article_output or f"outputs/{run_id}/article.md"
     source_ledger_output = args.source_ledger_output or f"outputs/{run_id}/source_ledger.csv"
     image_ledger_output = args.image_ledger_output or f"outputs/{run_id}/image_ledger.csv"
+    web_search = args.web_search or WEB_SEARCH_DEFAULTS[args.mode]
+
+    topic_path = resolve_repo_arg(parser, root, args.topic, "--topic")
+    sources_path = resolve_repo_arg(parser, root, args.sources, "--sources")
+    schema = resolve_repo_arg(parser, root, args.schema, "--schema")
+    output = resolve_repo_arg(parser, root, output, "--output")
+    article_output = resolve_repo_arg(parser, root, article_output, "--article-output")
+    source_ledger_output = resolve_repo_arg(parser, root, source_ledger_output, "--source-ledger-output")
+    image_ledger_output = resolve_repo_arg(parser, root, image_ledger_output, "--image-ledger-output")
+    work_run_dir = resolve_repo_arg(parser, root, work_run_dir, "work run directory")
+    draft_output = resolve_repo_arg(parser, root, draft_output, "draft output")
+    image_notes_dir = resolve_repo_arg(parser, root, image_notes_dir, "image notes directory")
+    image_ledger_candidate = resolve_repo_arg(parser, root, image_ledger_candidate, "image ledger candidate")
 
     prompt = build_prompt(
         mode=args.mode,
         run_id=run_id,
-        topic_path=as_posix_arg(args.topic),
-        sources_path=as_posix_arg(args.sources),
+        topic_path=topic_path,
+        sources_path=sources_path,
         work_run_dir=as_posix_arg(work_run_dir),
         draft_output=as_posix_arg(draft_output),
         image_notes_dir=as_posix_arg(image_notes_dir),
@@ -84,7 +115,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         root=root,
         codex_bin=args.codex_bin,
         run_id=run_id,
-        schema=as_posix_arg(args.schema),
+        schema=schema,
         output=as_posix_arg(output),
         article_output=as_posix_arg(article_output),
         source_ledger_output=as_posix_arg(source_ledger_output),
@@ -94,7 +125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         image_notes_dir=as_posix_arg(image_notes_dir),
         image_ledger_candidate=as_posix_arg(image_ledger_candidate),
         latest_dir="outputs/latest",
-        live_web_search=True,
+        web_search=web_search,
         allow_shell_network=args.allow_shell_network,
         prompt=prompt,
     )
