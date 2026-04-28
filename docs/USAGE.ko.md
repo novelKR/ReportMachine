@@ -45,6 +45,14 @@ python3 scripts/verify_layout.py
 python3 scripts/run_article.py --mode industry --smoke-test
 ```
 
+팀 내부 배포 도구가 이미지 파일만 허용하고 업로드한 JPG 원본 바이트를 그대로 보존하는 특수한 경우에는 실험용 image-binder 산출물을 명시적으로 만들 수 있습니다.
+
+```bash
+python3 scripts/package_source.py --experimental-image-binder --acknowledge-image-only-internal-distribution
+```
+
+이 명령은 검증된 ZIP payload를 JPG cover 뒤에 붙여 `dist/source/ReportMachine-source-{short_sha}-image-binder.jpg`를 만듭니다. cover에는 ZIP 파일을 포함한 File Binder 기반 실험용 내부 배포 파일이라는 경고 문구가 보이게 렌더링됩니다. 한글 렌더링이 가능한 환경이면 한국어와 영어 문구를 모두 렌더링하고, 한글 렌더링이 보장되지 않으면 영어 문구만 렌더링합니다. 이 옵션은 표준 ZIP 배포를 대체하지 않으며, 전달 도구가 이미지를 리사이즈, 최적화, trailing byte 제거, 재인코딩하면 ZIP payload가 손실될 수 있습니다.
+
 ## 3. 입력 파일
 
 기본 입력은 두 파일입니다.

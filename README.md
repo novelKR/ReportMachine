@@ -135,3 +135,11 @@ python3 scripts/package_source.py
 The helper packages Git HEAD into `dist/source/ReportMachine-source-{short_sha}.zip`, extracts the zip into a temporary directory, and runs `python3 scripts/verify_layout.py --release` against the extracted source before publishing the final archive. It fails by default when the working tree has uncommitted changes because those changes are not included in a Git HEAD archive. Pass `--allow-dirty` only when that exclusion is intentional.
 
 Manual `git archive` remains available for low-level use, but the helper is preferred because it validates that ignored local files such as `build/`, `dist/`, `.tmp/`, caches, PyInstaller `*.spec` files, local TOML presets, and generated outputs are not packaged.
+
+For internal tools that only allow image transfer and preserve original JPG bytes, an explicit experimental image-binder output is available:
+
+```bash
+python3 scripts/package_source.py --experimental-image-binder --acknowledge-image-only-internal-distribution
+```
+
+This writes `dist/source/ReportMachine-source-{short_sha}-image-binder.jpg`. The JPG cover visibly states that it contains a ZIP file and uses a file-binder based experimental internal distribution format. When Korean text rendering is available, the cover includes Korean and English notices; otherwise it renders the English notice only. This option is not a replacement for the standard ZIP archive, and it will fail after transfer if the image tool resizes, optimizes, strips trailing bytes, or re-encodes the JPG.

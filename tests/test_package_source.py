@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib.util
 import shutil
 import subprocess
 import sys
@@ -84,6 +85,42 @@ class PackageSourceTests(unittest.TestCase):
     def archive_names(self, archive_path: Path) -> set[str]:
         with zipfile.ZipFile(archive_path) as archive:
             return set(archive.namelist())
+
+    def prefix_from_stdout(self, process: subprocess.CompletedProcess[str]) -> str:
+        for line in process.stdout.splitlines():
+            if line.startswith("prefix: "):
+                return line.removeprefix("prefix: ")
+        self.fail("package_source.py did not print archive prefix")
+
+    def require_image_binder_runtime(self) -> None:
+        if importlib.util.find_spec("PIL") is None:
+            self.skipTest("Pillow is not installed")
+
+    def test_image_binder_declares_pillow_version_that_supports_sized_default_font(self) -> None:
+        import builtins
+        from scripts import package_source
+
+        pyproject = (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        requirements_build = (PROJECT_ROOT / "requirements-build.txt").read_text(encoding="utf-8")
+
+        self.assertIn('"Pillow>=10.1.0"', pyproject)
+        self.assertIn("Pillow>=10.1.0", requirements_build.splitlines())
+
+        original_import = builtins.__import__
+
+        def block_pillow_import(name, globals=None, locals=None, fromlist=(), level=0):
+            if name == "PIL" or name.startswith("PIL."):
+                raise ImportError("blocked Pillow import")
+            return original_import(name, globals, locals, fromlist, level)
+
+        builtins.__import__ = block_pillow_import
+        try:
+            with self.assertRaises(package_source.PackageSourceError) as context:
+                package_source.require_pillow_image_modules()
+        finally:
+            builtins.__import__ = original_import
+
+        self.assertIn("Pillow>=10.1.0", str(context.exception))
 
     def test_clean_repo_creates_default_archive_with_prefix_and_tracked_source(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -182,6 +219,125 @@ class PackageSourceTests(unittest.TestCase):
             self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
             self.assertIn("dry_run: no archive created", process.stdout)
             self.assertFalse((root / "dist").exists())
+
+    def test_image_binder_requires_explicit_acknowledgement(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.init_fixture_repo(root)
+
+            process = self.run_package(root, "--experimental-image-binder")
+
+            self.assertNotEqual(process.returncode, 0)
+            self.assertIn(
+                "--experimental-image-binder requires --acknowledge-image-only-internal-distribution",
+                process.stderr,
+            )
+            self.assertFalse((root / "dist").exists())
+
+    def test_image_binder_rejects_zip_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.init_fixture_repo(root)
+
+            process = self.run_package(
+                root,
+                "--experimental-image-binder",
+                "--acknowledge-image-only-internal-distribution",
+                "--output",
+                "dist/source/not-image.zip",
+            )
+
+            self.assertNotEqual(process.returncode, 0)
+            self.assertIn(
+                "--output must end with .jpg or .jpeg when --experimental-image-binder is used",
+                process.stderr,
+            )
+            self.assertFalse((root / "dist").exists())
+
+    def test_normal_archive_rejects_jpg_output_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.init_fixture_repo(root)
+
+            process = self.run_package(root, "--output", "dist/source/not-zip.jpg")
+
+            self.assertNotEqual(process.returncode, 0)
+            self.assertIn("--output must end with .zip", process.stderr)
+            self.assertFalse((root / "dist").exists())
+
+    def test_image_binder_creates_visible_jpg_that_remains_readable_as_zip(self) -> None:
+        self.require_image_binder_runtime()
+        from PIL import Image
+        from scripts import package_source
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.init_fixture_repo(root)
+
+            process = self.run_package(
+                root,
+                "--experimental-image-binder",
+                "--acknowledge-image-only-internal-distribution",
+            )
+
+            self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+            archives = list((root / "dist" / "source").glob("ReportMachine-source-*-image-binder.jpg"))
+            self.assertEqual(len(archives), 1)
+            archive_path = archives[0]
+            self.assertEqual(archive_path.read_bytes()[:2], b"\xff\xd8")
+            with Image.open(archive_path) as image:
+                self.assertEqual(image.format, "JPEG")
+                self.assertGreaterEqual(image.width, 1000)
+                self.assertGreaterEqual(image.height, 700)
+
+            prefix = self.prefix_from_stdout(process)
+            names = self.archive_names(archive_path)
+            self.assertIn(prefix + "README.md", names)
+            self.assertIn(prefix + "scripts/package_source.py", names)
+            package_source.validate_source_archive(archive_path, prefix)
+
+    def test_image_binder_notice_text_is_fixed_and_not_user_overridable(self) -> None:
+        from scripts import package_source
+
+        self.assertIn("ZIP 파일", package_source.IMAGE_BINDER_KO_NOTICE)
+        self.assertIn("File Binder", package_source.IMAGE_BINDER_KO_NOTICE)
+        self.assertIn("ZIP file", package_source.IMAGE_BINDER_EN_NOTICE)
+        self.assertIn("file-binder", package_source.IMAGE_BINDER_EN_NOTICE)
+        self.assertIn("English-only fallback", package_source.IMAGE_BINDER_ENGLISH_ONLY_NOTICE)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.init_fixture_repo(root)
+            process = self.run_package(root, "--help")
+
+        self.assertEqual(process.returncode, 0, process.stdout + process.stderr)
+        self.assertIn("--experimental-image-binder", process.stdout)
+        self.assertIn("--acknowledge-image-only-internal-distribution", process.stdout)
+        self.assertNotIn("--image-binder-text", process.stdout)
+        self.assertNotIn("--image-binder-cover", process.stdout)
+
+    def test_image_binder_cover_uses_english_only_fallback_without_korean_font(self) -> None:
+        self.require_image_binder_runtime()
+        from PIL import Image
+        from scripts import package_source
+
+        cjk_candidates = package_source.IMAGE_BINDER_FONT_CANDIDATES
+        latin_candidates = package_source.IMAGE_BINDER_LATIN_FONT_CANDIDATES
+        try:
+            package_source.IMAGE_BINDER_FONT_CANDIDATES = []
+            package_source.IMAGE_BINDER_LATIN_FONT_CANDIDATES = []
+            with tempfile.TemporaryDirectory() as temp_dir:
+                cover_path = Path(temp_dir) / "cover.jpg"
+                package_source.create_image_binder_cover(cover_path)
+
+                self.assertEqual(cover_path.read_bytes()[:2], b"\xff\xd8")
+                with Image.open(cover_path) as image:
+                    self.assertEqual(image.format, "JPEG")
+                    self.assertGreaterEqual(image.width, 1000)
+                    self.assertGreaterEqual(image.height, 700)
+        finally:
+            package_source.IMAGE_BINDER_FONT_CANDIDATES = cjk_candidates
+            package_source.IMAGE_BINDER_LATIN_FONT_CANDIDATES = latin_candidates
 
 
 if __name__ == "__main__":
