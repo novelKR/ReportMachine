@@ -17,6 +17,10 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
   - Use `$article-intake`.
   - Use it when the user provides a short natural-language topic and wants Codex to ask the missing questions, produce a plan, and after approval prepare/run the article workflow.
   - Default to run-local generated inputs under `work/runs/{run_id}/intake/`; mirror to `inputs/topic.md` and `inputs/sources.csv` only when the user explicitly approves that persistence target.
+- Repo usage, onboarding, setup, execution, and troubleshooting questions:
+  - Use `$reportmachine-usage`.
+  - Follow `docs/USAGE.ko.md` first, then `README.md` or `AGENTS.md` only when exact runner or routing details are needed.
+  - Do not use this route for article drafting, article QA, or conversational topic intake; route those to the article skills above.
 - Preview articles:
   - Do not treat preview requests as ordinary industry analysis.
   - If `prompts/PREVIEW_PROMPT.md` is absent, return a schema-valid failure JSON with `article_type = "preview"`, `checklist_status = "fail"`, and a `critical_warnings` entry that the preview-specific prompt contract is missing.

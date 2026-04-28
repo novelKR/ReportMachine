@@ -2,6 +2,12 @@
 
 ReportMachine is a Codex-oriented workspace for Korean industry and earnings article workflows.
 
+## Usage Guide
+
+For first-time setup, Codex App vs Codex CLI execution, input files, runner options, output paths, and troubleshooting, start with `docs/USAGE.ko.md`.
+
+When asking Codex usage or onboarding questions inside this repo, use `$reportmachine-usage`. For article drafting or review, continue to use `$article-intake`, `$industry-article`, `$earnings-article`, or `$article-qa` as appropriate.
+
 ## Codex Project Trust
 
 Open this project as a trusted Codex project before running article automation. If the project is untrusted, project-scoped `.codex/` configuration, custom agents, hooks, and rules are not loaded.

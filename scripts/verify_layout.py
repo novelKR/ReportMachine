@@ -25,6 +25,8 @@ REQUIRED_FILES = [
     ".agents/skills/earnings-article/SKILL.md",
     ".agents/skills/article-qa/SKILL.md",
     ".agents/skills/article-intake/SKILL.md",
+    ".agents/skills/reportmachine-usage/SKILL.md",
+    "docs/USAGE.ko.md",
     "prompts/PROMPT.md",
     "prompts/FORMAT.md",
     "prompts/EARNINGS_PROMPT.md",
@@ -235,6 +237,8 @@ def main() -> int:
         "README.md",
         readme_text,
         [
+            "$reportmachine-usage",
+            "docs/USAGE.ko.md",
             "--config reportmachine.example.toml --profile default --smoke-test",
             "$article-intake",
             "--prepare-only",
@@ -251,6 +255,8 @@ def main() -> int:
         "AGENTS.md",
         agents_text,
         [
+            "$reportmachine-usage",
+            "docs/USAGE.ko.md",
             "$article-intake",
             "App-native fallback exception",
             "schemas/article_result.schema.json",
