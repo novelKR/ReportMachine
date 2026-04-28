@@ -19,6 +19,7 @@ Use the OS-neutral runner instead of invoking `$earnings-article` or `$industry-
 ```bash
 python3 scripts/run_article.py --mode industry --smoke-test
 python3 scripts/run_article.py --mode earnings --smoke-test
+python3 scripts/run_article.py --config reportmachine.example.toml --profile default --smoke-test
 ```
 
 Default outputs are written under `outputs/{run_id}/`. After a successful validated run, `outputs/latest/` is refreshed from that run.
@@ -36,6 +37,18 @@ Shell network access remains disabled by default. Enable it only for runs that n
 ```bash
 python3 scripts/run_article.py --mode earnings --allow-shell-network
 ```
+
+## TOML Presets And External Artifacts
+
+Use `reportmachine.example.toml` as the tracked preset template. Copy it to `reportmachine.local.toml` for machine-specific paths:
+
+```bash
+python3 scripts/run_article.py --config reportmachine.local.toml --profile default
+```
+
+Profile values provide defaults for mode, input paths, schema, web search, shell network access, and run-id prefix. CLI flags override TOML values.
+
+External artifact roots are runner-only. Codex agents continue to write only repo-local run paths such as `work/runs/{run_id}/` and `outputs/{run_id}/`. When `profiles.<name>.artifacts.external_root` is set, the runner can import previous artifacts from that external root, periodically snapshot the repo-local run cache, export final files to `runs/{run_id}/` and `latest/`, and optionally remove the successful run cache.
 
 ## Release Archive
 

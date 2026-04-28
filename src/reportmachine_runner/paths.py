@@ -41,5 +41,26 @@ def resolve_under_root(root: Path, value: str) -> Path:
     return resolved
 
 
+def resolve_external_root(project_root: Path, value: str) -> Path:
+    if not value:
+        raise ValueError("External artifact root must not be empty")
+
+    windows_path = PureWindowsPath(value)
+    if windows_path.drive and os.name != "nt":
+        raise ValueError(f"Windows drive paths are not supported on this OS: {value}")
+
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise ValueError(f"External artifact root must be an absolute path or use '~': {value}")
+
+    project_root = project_root.expanduser().resolve()
+    resolved = path.resolve()
+    try:
+        resolved.relative_to(project_root)
+    except ValueError:
+        return resolved
+    raise ValueError(f"External artifact root must be outside the project root: {value}")
+
+
 def as_posix_arg(value: str) -> str:
     return Path(value).as_posix()

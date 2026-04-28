@@ -49,6 +49,7 @@ ReportMachine is a Codex-oriented workspace for generating Korean industry analy
 - Structured result: `outputs/{run_id}/article_result.json` is written only by `codex exec -o` from the final assistant message, not directly by an agent.
 - Latest mirror: after a successful, validated run, `outputs/latest/` may be updated from `outputs/{run_id}/`.
 - Generated artifacts must stay under `work/runs/{run_id}/`, `outputs/{run_id}/`, or `outputs/latest/` unless the user explicitly asks for repo configuration edits.
+- External artifact roots configured by runner TOML presets are runner-only import/export targets. Agents must not write external paths directly.
 
 ## Safety And Quality Rules
 

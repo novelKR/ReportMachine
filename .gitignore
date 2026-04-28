@@ -1,4 +1,5 @@
 .codex-home/
+reportmachine.local.toml
 .tmp/
 work/**/*.md
 work/**/*.json

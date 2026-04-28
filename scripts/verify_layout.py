@@ -13,6 +13,7 @@ REQUIRED_FILES = [
     "README.md",
     ".article-root",
     ".codex/config.toml",
+    "reportmachine.example.toml",
     ".codex/agents/source_researcher.toml",
     ".codex/agents/earnings_delta_analyst.toml",
     ".codex/agents/image_slide_auditor.toml",
@@ -32,7 +33,9 @@ REQUIRED_FILES = [
     "inputs/topic.md",
     "inputs/sources.csv",
     "scripts/run_article.py",
+    "src/reportmachine_runner/artifacts.py",
     "src/reportmachine_runner/cli.py",
+    "src/reportmachine_runner/config.py",
     "src/reportmachine_runner/codex_exec.py",
     "src/reportmachine_runner/prompt.py",
 ]
@@ -183,6 +186,25 @@ def main() -> int:
             errors.append(f"missing config setting: {required}")
     if "codex_hooks = true" in config_text:
         errors.append("codex_hooks must stay disabled until real hooks are configured")
+
+    gitignore_text = (root / ".gitignore").read_text(encoding="utf-8")
+    if "reportmachine.local.toml" not in gitignore_text:
+        errors.append(".gitignore must ignore reportmachine.local.toml")
+
+    pyproject_text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    if 'tomli>=2; python_version < "3.11"' not in pyproject_text:
+        errors.append("pyproject.toml must include the Python 3.10 TOML parser dependency")
+
+    readme_text = (root / "README.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "README.md",
+        readme_text,
+        [
+            "--config reportmachine.example.toml --profile default --smoke-test",
+            "External artifact roots are runner-only",
+        ],
+    )
 
     codex_exec_text = (root / "src/reportmachine_runner/codex_exec.py").read_text(encoding="utf-8")
     if "--full-auto" in codex_exec_text:

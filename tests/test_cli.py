@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import subprocess
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stderr, redirect_stdout
@@ -58,6 +59,12 @@ class CliDryRunTests(unittest.TestCase):
             if missing and name in missing:
                 continue
             (output_dir / name).write_text(name, encoding="utf-8")
+
+    def write_config(self, root: Path, text: str, name: str = "reportmachine.toml") -> Path:
+        path = root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
 
     def test_dry_run_does_not_create_default_output_dirs_under_custom_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -140,6 +147,160 @@ class CliDryRunTests(unittest.TestCase):
             self.assertIn("smoke-test: command and prompt built without execution", output)
             self.assertIn("Use $earnings-article.", output)
             self.assertFalse(root.exists())
+
+    def test_direct_script_no_config_smoke_test_does_not_require_site_packages(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-S",
+                str(root / "scripts" / "run_article.py"),
+                "--mode",
+                "industry",
+                "--run-id",
+                "test_run",
+                "--smoke-test",
+            ],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+        output = result.stdout + result.stderr
+        self.assertEqual(result.returncode, 0, output)
+        self.assertIn("smoke-test: command and prompt built without execution", output)
+        self.assertIn("Use $industry-article.", output)
+
+    def test_config_only_requires_toml_backend_when_config_is_used(self) -> None:
+        real_import = __import__
+
+        def block_toml_imports(
+            name: str,
+            globals: dict[str, object] | None = None,
+            locals: dict[str, object] | None = None,
+            fromlist: tuple[str, ...] = (),
+            level: int = 0,
+        ) -> object:
+            if name in {"tomllib", "tomli"}:
+                raise ModuleNotFoundError(f"No module named {name!r}")
+            return real_import(name, globals, locals, fromlist, level)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+""".lstrip(),
+            )
+
+            with patch("builtins.__import__", side_effect=block_toml_imports):
+                no_config_status, no_config_output = self.run_cli(
+                    [
+                        "--mode",
+                        "industry",
+                        "--project-root",
+                        str(root),
+                        "--smoke-test",
+                    ]
+                )
+                config_status, config_output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--smoke-test",
+                    ]
+                )
+
+            self.assertEqual(no_config_status, 0, no_config_output)
+            self.assertEqual(config_status, 2)
+            self.assertIn("TOML config support requires Python 3.11+ or the tomli package", config_output)
+            self.assertNotIn("Traceback", config_output)
+
+    def test_config_profile_supplies_mode_paths_web_search_and_run_id_prefix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.custom]
+mode = "earnings"
+topic = "inputs/custom-topic.md"
+sources = "inputs/custom-sources.csv"
+schema = "schemas/custom-schema.json"
+web_search = "live"
+run_id_prefix = "custom"
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--profile",
+                    "custom",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("run_id: custom_", output)
+            self.assertIn("Use $earnings-article.", output)
+            self.assertIn('web_search="live"', output)
+            self.assertIn("inputs/custom-topic.md", output)
+            self.assertIn("inputs/custom-sources.csv", output)
+            self.assertIn("schemas/custom-schema.json", output)
+
+    def test_cli_values_override_config_profile_values(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+topic = "inputs/config-topic.md"
+sources = "inputs/config-sources.csv"
+web_search = "cached"
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--mode",
+                    "earnings",
+                    "--web-search",
+                    "disabled",
+                    "--topic",
+                    "inputs/override-topic.md",
+                    "--sources",
+                    "inputs/override-sources.csv",
+                    "--run-id",
+                    "override_run",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 0, output)
+            self.assertIn("run_id: override_run", output)
+            self.assertIn("Use $earnings-article.", output)
+            self.assertIn('web_search="disabled"', output)
+            self.assertIn("inputs/override-topic.md", output)
+            self.assertIn("inputs/override-sources.csv", output)
+            self.assertNotIn("inputs/config-topic.md", output)
 
     def test_normal_run_creates_output_dirs_before_running_command(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -297,6 +458,36 @@ class CliDryRunTests(unittest.TestCase):
 
                     self.assertEqual(status, 2)
                     self.assertIn(expected, output)
+
+    def test_external_artifact_root_must_stay_outside_project_root(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.artifacts]
+external_root = "{(root / "artifacts").as_posix()}"
+""".lstrip(),
+            )
+
+            status, output = self.run_cli(
+                [
+                    "--project-root",
+                    str(root),
+                    "--config",
+                    "reportmachine.toml",
+                    "--run-id",
+                    "test_run",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 2)
+            self.assertIn("External artifact root must be outside the project root", output)
 
     @unittest.skipIf(Draft202012Validator is None, "jsonschema is not installed")
     def test_article_result_schema_rejects_successful_earnings_without_scorecard(self) -> None:
@@ -523,6 +714,152 @@ class CliDryRunTests(unittest.TestCase):
             self.assertEqual(
                 (root / "outputs" / "latest" / "article_result.json").read_text(encoding="utf-8"),
                 "after-configured-output",
+            )
+
+    def test_successful_configured_external_export_omits_external_path_from_codex_prompt_and_cleans_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+cleanup_cache_on_success = true
+preserve_cache_on_failure = true
+""".lstrip(),
+            )
+
+            captured_command: list[str] = []
+
+            def fake_run(command: list[str], *, cwd: Path) -> int:
+                captured_command.extend(command)
+                self.assertEqual(cwd, root.resolve())
+                work_draft = root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
+                work_draft.parent.mkdir(parents=True, exist_ok=True)
+                work_draft.write_text("draft", encoding="utf-8")
+                self.write_default_outputs(root)
+                return 0
+
+            with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                    ]
+                )
+
+            self.assertEqual(status, 0, output)
+            self.assertNotIn(external_root.as_posix(), " ".join(captured_command))
+            self.assertEqual(
+                (external_root / "runs" / "test_run" / "article.md").read_text(encoding="utf-8"),
+                "article.md",
+            )
+            self.assertTrue((external_root / "latest" / "reportmachine_manifest.json").is_file())
+            self.assertFalse((root / "work" / "runs" / "test_run").exists())
+            self.assertFalse((root / "outputs" / "test_run").exists())
+            self.assertTrue((root / "outputs" / "latest" / "article.md").is_file())
+
+    def test_external_export_failure_preserves_latest_and_success_cache(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            latest_dir = root / "outputs" / "latest"
+            latest_dir.mkdir(parents=True)
+            (latest_dir / "article.md").write_text("stale-article", encoding="utf-8")
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+cleanup_cache_on_success = true
+""".lstrip(),
+            )
+
+            def fake_run(_command: list[str], *, cwd: Path) -> int:
+                self.assertEqual(cwd, root.resolve())
+                self.write_default_outputs(root)
+                return 0
+
+            with (
+                patch("reportmachine_runner.cli.run_command", side_effect=fake_run),
+                patch("reportmachine_runner.cli.export_final_artifacts", side_effect=OSError("disk full")),
+            ):
+                status, output = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                    ]
+                )
+
+            self.assertEqual(status, 2)
+            self.assertIn("Final artifact export failed: disk full", output)
+            self.assertEqual((latest_dir / "article.md").read_text(encoding="utf-8"), "stale-article")
+            self.assertFalse((latest_dir / "article_result.json").exists())
+            self.assertTrue((root / "work" / "runs" / "test_run").is_dir())
+            self.assertTrue((root / "outputs" / "test_run").is_dir())
+
+    def test_failed_configured_external_run_preserves_cache_and_writes_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = self.init_git_root(temp_dir)
+            external_root = Path(temp_dir) / "artifacts"
+            self.write_config(
+                root,
+                f"""
+[profiles.default]
+mode = "industry"
+
+[profiles.default.artifacts]
+external_root = "{external_root.as_posix()}"
+preserve_cache_on_failure = true
+""".lstrip(),
+            )
+
+            def fake_run(_command: list[str], *, cwd: Path) -> int:
+                work_draft = cwd / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
+                work_draft.parent.mkdir(parents=True, exist_ok=True)
+                work_draft.write_text("partial draft", encoding="utf-8")
+                return 7
+
+            with patch("reportmachine_runner.cli.run_command", side_effect=fake_run):
+                status, _ = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                    ]
+                )
+
+            self.assertEqual(status, 7)
+            self.assertTrue((root / "work" / "runs" / "test_run").is_dir())
+            self.assertEqual(
+                (
+                    external_root
+                    / "runs"
+                    / "test_run"
+                    / "snapshot"
+                    / "work_run"
+                    / "drafts"
+                    / "draft_article.md"
+                ).read_text(encoding="utf-8"),
+                "partial draft",
             )
 
     def test_post_run_validator_rejects_changed_or_deleted_existing_ignored_artifacts(self) -> None:

@@ -3,11 +3,13 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Sequence
+from typing import Callable, Sequence
 
+from .artifacts import ArtifactSyncConfig
 from .paths import resolve_under_root
 
 
@@ -28,6 +30,7 @@ class CodexExecConfig:
     latest_dir: str
     web_search: str
     allow_shell_network: bool
+    artifact_sync: ArtifactSyncConfig
     prompt: str
 
 
@@ -68,11 +71,35 @@ def build_command(config: CodexExecConfig) -> list[str]:
     return command
 
 
-def run_command(command: Sequence[str], *, cwd: Path) -> int:
+def run_command(
+    command: Sequence[str],
+    *,
+    cwd: Path,
+    snapshot_callback: Callable[[], None] | None = None,
+    snapshot_interval_seconds: int = 0,
+) -> int:
     env = os.environ.copy()
     env.setdefault("PYTHONUTF8", "1")
     env.setdefault("PYTHONIOENCODING", "utf-8")
-    return subprocess.run(list(command), cwd=cwd, env=env, text=True, check=False).returncode
+    if snapshot_callback is None or snapshot_interval_seconds <= 0:
+        return subprocess.run(list(command), cwd=cwd, env=env, text=True, check=False).returncode
+
+    process = subprocess.Popen(list(command), cwd=cwd, env=env, text=True)
+    next_snapshot = time.monotonic() + snapshot_interval_seconds
+    try:
+        while True:
+            status = process.poll()
+            now = time.monotonic()
+            if now >= next_snapshot:
+                snapshot_callback()
+                next_snapshot = now + snapshot_interval_seconds
+            if status is not None:
+                return status
+            sleep_for = max(0.1, min(1.0, next_snapshot - now))
+            time.sleep(sleep_for)
+    except BaseException:
+        snapshot_callback()
+        raise
 
 
 @dataclass(frozen=True)

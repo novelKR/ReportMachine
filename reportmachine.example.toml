@@ -1,0 +1,27 @@
+[profiles.default]
+mode = "industry"
+topic = "inputs/topic.md"
+sources = "inputs/sources.csv"
+schema = "schemas/article_result.schema.json"
+web_search = "cached"
+allow_shell_network = false
+run_id_prefix = "default"
+
+# Copy this file to reportmachine.local.toml for machine-specific artifact roots.
+# External artifact roots are used only by the runner. They are not exposed to Codex prompts.
+#
+# [profiles.default.artifacts]
+# external_root = "~/ReportMachineArtifacts"
+# import_existing = true
+# snapshot_interval_seconds = 60
+# cleanup_cache_on_success = true
+# preserve_cache_on_failure = true
+
+[profiles.earnings]
+mode = "earnings"
+topic = "inputs/topic.md"
+sources = "inputs/sources.csv"
+schema = "schemas/article_result.schema.json"
+web_search = "live"
+allow_shell_network = false
+run_id_prefix = "earnings"
