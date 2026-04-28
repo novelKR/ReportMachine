@@ -1,192 +1,208 @@
-# FORMAT.md — 산업분석 아티클 출력 포맷 (최소 저점 규정)
+# FORMAT.md - Minimum Article Output Floor
 
-이 문서는 **논리 전개 품질의 최소 저점** 을 규정합니다. **콘텐츠 템플릿이 아닙니다.**
+This file defines the minimum structural and formatting floor for ReportMachine articles. It is not a content template.
 
-이 파일 역시 특정 주제·기업·내러티브 예시를 포함하지 않습니다. 구조적 최소 요건만 다룹니다.
+Do not copy the same external skeleton across articles. A valid article can have different section names and order each time, as long as it satisfies this floor and the narrative rules in `PROMPT.md`.
 
-작성 지침 (페르소나·톤·리서치·서사 전개·이미지 정책) 은 `PROMPT.md` 를 참조하십시오.
+## Korean Output Contract
 
-> **핵심 원칙 — 이 파일은 "무엇을 지키지 않으면 안 되는지" 만 규정한다**
->
-> 특정 스켈레톤·고정 섹션 제목·필수 끝맺음 관례는 이 포맷에 없습니다. 그런 것들은 특정 주제에서 만들어진 우연한 선택이며, 새 주제에 복제하면 자가 표절·신뢰성 손실이 됩니다.
->
-> 새 아티클의 구조는 **주제의 논리가 스스로 요구하는 모양** 으로 만들어지십시오. 이 파일은 그 모양이 어떻든 지켜야 할 최소 품질만 명시합니다.
+Final article prose must be natural Korean in honorific style (`~입니다`, `~합니다`). Keep Korean output literals where specified, including the article title/subtitle format, scorecard label `한눈에 보기`, Korean disclaimer intent, and Korean citation examples.
 
 ---
 
-## 1. 구조가 반드시 지켜야 할 것 (저점)
+## 1. Structural Minimums
 
-### 1.1 헤더
+### 1.1 Header
 
-- `# {{한 줄 제목}}` — 시리즈 번호·과거 아티클 나열 금지. 도발적 명제·명사 주제 무엇이든 가능.
-- `*{{부제}}*` — 이 아티클이 답하려는 **하나의 질문** 또는 제시하려는 **하나의 관찰**.
+The article must begin with:
 
-### 1.2 INTRO 섹션에 반드시 담아야 할 것
+- `# {{한 줄 제목}}` - one-line Korean title. No series number, installment label, or prior-article reference.
+- `*{{부제}}*` - one Korean subtitle stating the article's central question or central observation.
 
-- **이 글이 쓰이게 된 계기** — 최근 (수 일 ~ 수 주 이내) 뉴스·사건·시장 움직임·데이터 포인트 1~2 건. 원문 URL 인용.
-- **이 글이 답할 질문** — 말미에서 한 문장으로 선언.
-- **이 글의 범위와 한계** — 무엇을 다루고 무엇을 다루지 않는지.
-- **투자권유 아님 고지 + 이미지·수치 출처 원칙**.
+### 1.2 Intro Requirements
 
-INTRO 는 의례적 오프닝 (예: "N 편 시작합니다" 류) 을 쓰지 않습니다.
+The intro must include:
 
-### 1.3 본문 (Body)
+- A recent trigger from the last days or weeks where possible: news, filing, order, regulation, market event, data point, or earnings material. Cite the original URL.
+- The question the article will answer, preferably in one sentence near the end of the intro.
+- Scope and limits: what the article covers and what it deliberately does not cover.
+- A non-recommendation notice and source principle for numbers and images.
 
-- 본문은 **주제의 논리가 요구하는 수의 섹션** 으로 구성. 섹션 수·순서·제목은 자유.
-- 다음 세 가지가 논리적으로 포함되어야 함 (각각을 별도 섹션으로 둘지, 인접 섹션에 녹일지는 자유):
-  - **① 개념 정의 / 경계 짓기** — 독자가 주제를 오해하지 않도록
-  - **② 근거·증거** — 1 차 자료의 수치·차트로 주장 뒷받침
-  - **③ 구조·분류 도구 또는 메커니즘** — 독자에게 "사고 도구" 하나를 남김
-- 서브섹션 번호 (1.1 / 1.2 / 1.3 형태) 는 기본적으로 쓰지 않음. 필요하면 의미 중심 H3 제목만 사용.
-- 섹션당 최소 분량 기준 없음. 2~3 문장으로 끝날 섹션은 인접 섹션과 병합하거나 삭제.
+Do not use ceremonial openers such as "N 편 시작합니다".
 
-### 1.4 서사 전개의 구조적 반영
+### 1.3 Body Requirements
 
-`PROMPT.md` 3 절의 서사 전개 원칙이 본문 구조에 반영되어야 합니다:
+The body is organized into as many sections as the topic requires. Section count, order, and names are free.
 
-- **중심 흐름**: 본문 전체가 하나의 논지 곡선을 그리도록 섹션을 배치
-- **가지**: 독립 섹션들이 중심 흐름 설명에 기여
-- **사슬**: 섹션 사이 전환부에서 관계 (보완·대체·경쟁) 를 명시적으로 연결
-- **최근 이벤트는 증거 위치**: 뉴스·주가 움직임은 INTRO 훅 또는 본문 중후반의 **확인 섹션**에 배치. 논지 전체를 끌어가는 프레임으로 쓰지 말 것.
+The body must include, whether as separate sections or integrated prose:
 
-### 1.5 이미지·표·인용
+1. Concept definition or boundary-setting so the reader does not misunderstand the subject.
+2. Evidence from primary sources, including numbers, charts, slides, or official documents when claims require them.
+3. One structural tool, classification, or mechanism that leaves the reader with a way to think about the subject.
 
-- 삽입은 `PROMPT.md` 7 절 이미지 정책에 따름.
-- 모든 정량 주장은 1 차 자료 URL 인라인 인용. 괄호 형식 자유.
+Avoid repeated `1.1 / 1.2 / 1.3` style subnumbering in the final article. Use meaningful Korean H3 headings only when they help.
 
-### 1.6 마무리
+Merge or delete sections that would contain only 2-3 sentences.
 
-- 본문의 **핵심 주장 한 문장 재선언** 정도로 충분.
-- 고정 관례 (3 줄 요약·투자 지도·특정 끝맺음 문구) 는 쓰지 않음. 주제에 자연스럽게 맞으면 쓰고, 안 맞으면 쓰지 마십시오.
-- 시리즈의 일부로 쓴 경우: 다음 편이 무엇을 다룰지 한두 문장만.
+### 1.4 Narrative Reflection
 
-### 1.7 면책 + 출처 일괄
+The body must reflect `PROMPT.md` §3:
 
-- 투자권유 아님 고지
-- 수치·이미지 출처 원칙 고지
-- 참고 자료 카테고리 분류 목록
+- One central flow.
+- Branches that serve the central flow.
+- Explicit chain logic between branches.
+- Recent events placed as intro hooks or confirmation evidence, not as the entire frame.
 
----
+### 1.5 Images, Tables, And Citations
 
-## 2. 반복·표절 회피
+- Follow `PROMPT.md` §7 and `SOURCE_POLICY.md`.
+- Every quantitative claim needs a primary source URL or explicit uncertainty qualifier.
+- Image captions must match the actual image content.
+- For rendered slides, direct visual inspection is required before captions.
 
-### 2.1 이전 아티클과 동일한 스켈레톤 사용 금지
+### 1.6 Closing
 
-- 이전 아티클이 특정 순서 (예: 정의 → 문제 → 정량 → 기술 → 밸류체인 → 리스크 → 답 → 표준 → 지도) 를 취했다면 새 주제에 같은 순서를 복제하지 않음.
-- 주제의 논리가 그 순서와 자연스럽게 맞더라도 **섹션 제목·서브섹션 번호를 다르게** 설계.
+The closing should restate the core claim in one or two paragraphs. Do not add fixed rituals such as mandatory three-line summaries, investment maps, target prices, or recommendation language.
 
-### 2.2 서사 라벨 재사용 금지
+If the article is explicitly part of a justified series, mention only the next question in one or two sentences.
 
-이전 아티클에서 만들어진 고유한 서사 라벨 · 프레임 이름 · 특정 문구 · 3 부작 · 연작 구조 등을 새 아티클에 복제하지 않습니다. 유사한 구조적 아이디어를 써야 한다면 **주제에 맞는 새 표현**으로 다시 만들고, 왜 이 새 주제에도 유효한지를 본문에서 정당화.
+### 1.7 Disclaimer And Source List
 
-### 2.3 의례적 표현 금지
+End with:
 
-특정 저자·시리즈의 관례 문구를 기계적으로 복제하지 않습니다. 자가 표절로 읽힙니다.
-
-### 2.4 번호 서브섹션 패턴 반복 금지
-
-`### 1.1 ... ### 1.2 ... ### 1.3` 형태를 아티클마다 반복하면 구조 자체가 표절처럼 보입니다. 의미 중심 H3 제목을 쓰거나, 번호를 아예 빼십시오.
+- A non-investment-recommendation notice.
+- A note that numbers and images follow cited source materials.
+- A categorized reference list.
 
 ---
 
-## 3. 단일 보고서 (기본값) vs 시리즈 (예외)
+## 2. Anti-Repetition Rules
 
-### 3.1 기본값은 단일 종합 보고서
+### 2.1 No Prior Skeleton Reuse
 
-- 한 주제는 **하나의 완결 보고서** 로 작성.
-- 분량 600~900 줄, 상한 약 1,200 줄.
-- 시리즈 분할 전제로 각 편을 얇게 만들지 말 것 — 얇아지는 순간 필요 없는 내용으로 패딩됨.
+If a prior article used a sequence such as definition -> problem -> numbers -> technology -> value chain -> risk -> answer, do not reuse that same sequence by default. If the topic truly requires a similar flow, change the section names and justify the logic through the topic itself.
 
-### 3.2 시리즈가 정당한 경우
+### 2.2 No Narrative Label Reuse
 
-아래 중 하나에 해당할 때만 시리즈로 분할:
+Do not reuse distinctive narrative labels, frame names, slogans, series labels, or section-title formulas from prior articles.
 
-- 한 편으로 다루면 1,500 줄을 넘어 한 번에 읽히지 않음
-- 주제가 독립적인 두세 개 큰 질문으로 자연스럽게 나뉨
-- 시점 업데이트가 필요해 편마다 다른 시점을 다룸
+### 2.3 No Ceremonial Phrases
 
-### 3.3 시리즈 상한
+Do not attach author-series habits or ceremonial endings mechanically. They read as self-plagiarism.
 
-시리즈 최대 3 편. 4 편 이상은 독자 피로.
+### 2.4 No Repeated Numbering Pattern
 
-### 3.4 도입편에 단일 보고서 마무리 관례를 쓰지 않기
-
-시리즈 도입편은 최종 편의 전체 요약·투자 지도 같은 관례를 쓰지 말 것. 단일 보고서로 오독됨.
+Avoid repeating `### 1.1 ...`, `### 1.2 ...`, `### 1.3 ...` style article sections. Use meaning-driven Korean headings or no subheadings.
 
 ---
 
-## 4. 서식·수치·인용 규칙 (기계적 저점)
+## 3. Single Report By Default
 
-### 4.1 표기
+### 3.1 Default
 
-- 존댓말 100% (~입니다/~합니다).
-- 수치는 3 자리 콤마.
-- 연도는 YYYY.MM 또는 "YYYY 년 MM 월" 통일.
-- 통화·단위 기호 일관.
+One topic should become one complete report.
 
-### 4.2 인용 형식 예
+Default length: 600-900 lines. Upper range: about 1,200 lines.
+
+Do not split a topic into thin installments just to create a series.
+
+### 3.2 When A Series Is Justified
+
+Use a series only when:
+
+- One article would exceed about 1,500 lines.
+- The topic naturally divides into two or three large independent questions.
+- Time-staged updates are part of the subject.
+
+### 3.3 Series Limit
+
+Maximum series length: 3 parts. Four or more parts create reader fatigue unless the user explicitly approves a broader project.
+
+### 3.4 Introductory Series Parts
+
+An introductory series part must not use the closing conventions of a complete single report. That would mislead the reader into thinking the analysis is already complete.
+
+---
+
+## 4. Mechanical Formatting Rules
+
+### 4.1 Korean Style
+
+- 100% honorific Korean: `~입니다`, `~합니다`.
+- Use thousands separators for numbers.
+- Use either `YYYY.MM` or `YYYY 년 MM 월` consistently.
+- Keep currency and units consistent.
+
+### 4.2 Citation Example
 
 ```markdown
 ... ([*{{보고서명, YYYY.MM}}*]({{URL}}))
 ```
 
-모든 정량 주장은 1 차 자료 URL. 모호한 출처 금지.
+All quantitative claims need a primary source URL or explicit uncertainty qualifier. Vague sourcing is not acceptable.
 
-### 4.3 표
+### 4.3 Tables
 
-- 재무·밸류에이션 수치 **0 건** (`PROMPT.md` 6 절).
-- 허용되는 기업 정량: 점유율(%), 생산 능력, 특허 건수, 인증.
+General industry articles must contain zero financial or valuation metrics. Follow `SOURCE_POLICY.md` and `PROMPT.md` §6.
 
-### 4.4 참고 자료
+Allowed company quantitative information in general articles includes market share (%), production capacity, patents, certifications, technical specifications, and similar operational evidence.
 
-- 카테고리 분류 (정부·규제·기업 기술 자료·공개 교육 등)
-- 모든 항목에 1 차 자료 URL
+### 4.4 Reference List
 
----
+Group references by category, such as government/regulatory, company technical material, company IR, public education, standards bodies, research institutes, or media context.
 
-## 5. 최소 체크리스트 (출력 전 점검)
-
-### 5.1 구조
-- [ ] 제목 한 줄 + 부제 한 줄, 시리즈 번호 없음
-- [ ] INTRO 에 최근 뉴스 훅·글 질문·범위·한계·면책 모두 포함
-- [ ] 본문에 개념 경계·근거·분류 도구/메커니즘 세 축 존재 (섹션 분할 자유)
-- [ ] 본문이 중심 흐름 → 가지 → 사슬 → 확인 증거 구조로 흐르는가
-- [ ] 최근 이벤트가 프레임이 아니라 확인 증거 위치인가
-- [ ] 본문에 과거 아티클 인용 0 건
-
-### 5.2 반복 회피
-- [ ] 이전 아티클의 섹션 순서·스켈레톤 복제하지 않음
-- [ ] 이전 아티클의 고유 서사 라벨·문구 재사용 0 건
-- [ ] 서브섹션 번호 패턴이 이전 아티클과 동일하지 않음
-- [ ] 의례적 표현을 기계적으로 붙이지 않음
-
-### 5.3 내용 품질
-- [ ] 본문 전반 재무·밸류에이션 수치 0 건
-- [ ] 기업 언급은 기술·운영 펀더멘탈만
-- [ ] 이미지 편당 6~12 장 (`PROMPT.md` 7 절 이미지-본문 통합·비교 쌍 원칙 준수)
-- [ ] AI 생성 이미지 0 장
-- [ ] 모든 수치에 1 차 자료 URL
-- [ ] 분량 600~900 줄 적정. 400 줄 미만은 미완성 인상
-- [ ] 자의적 분류 체계 없음
-
-### 5.4 짧은 섹션 정리
-- [ ] 2~3 문장으로 끝나는 섹션이 있다면 병합 또는 삭제
-
-### 5.5 실적·IR 자료 기반 아티클 전용 체크 (해당 시)
-
-기업 실적·컨퍼런스콜·투자자 프레젠테이션을 1차 자료로 쓰는 아티클에만 해당:
-
-- [ ] 직전 분기 실적 자료를 같이 다운로드·비교했는가 (`PROMPT.md` 5-A.1)
-- [ ] 직전 분기에 있었는데 이번에 사라진 highlight 최소 2개 탐색했는가
-- [ ] 서술 단위가 연간 → 순차 로 바뀐 지표가 있는지 확인했는가
-- [ ] 가이던스 레인지는 유지됐지만 가정이 악화된 부분이 있는지 확인했는가
-- [ ] 동일 원인 설명의 효과 폭이 분기 간 변했는지 확인했는가
-- [ ] IR 서사 프레임을 본문에서 명시하고 반대 해석을 병치했는가
-- [ ] "진정으로 강해진 것들" 카운터 섹션으로 비판을 교정했는가
-- [ ] 자기 수정이 한 방향 (대부분 낙관 강화) 으로만 일어나지 않았는가
-- [ ] **INTRO 직전 "한눈에 보기" 스코어카드 블록 (총점 + 5 축 + 2-4 문장 평가) 포함**되어 있는가 (`PROMPT.md` 5-A.7)
-- [ ] **렌더링한 모든 슬라이드 이미지를 Read 툴로 직접 열어 실제 내용을 확인한 뒤 캡션을 썼는가** (`PROMPT.md` 7.7) — 슬라이드 번호 추정으로 캡션 쓰기 금지
+Every listed reference needs a URL.
 
 ---
 
-*이 포맷은 최소 저점만 규정합니다. 저점을 지켰다면 아티클의 외형은 주제마다 달라야 정상입니다. 저점 이상의 모든 구조·수사·서사는 저자가 주제마다 새로 설계하는 것이며, 이 파일에 명시된 것이 아닙니다.*
+## 5. Final Checklist
+
+### 5.1 Structure
+
+- [ ] One-line Korean title and one subtitle; no series number unless explicitly justified.
+- [ ] Intro includes recent trigger, article question, scope/limits, and disclaimer.
+- [ ] Body includes boundary-setting, evidence, and a structural mechanism.
+- [ ] Body flows through central flow -> branches -> chain -> confirmation evidence.
+- [ ] Recent events are evidence or hooks, not the whole frame.
+- [ ] Zero prior-article references.
+
+### 5.2 Repetition
+
+- [ ] No copied section sequence from prior articles.
+- [ ] No reused narrative labels or distinctive prior phrasing.
+- [ ] No repeated subnumbering formula.
+- [ ] No ceremonial series phrases.
+
+### 5.3 Content Quality
+
+- [ ] General articles contain zero prohibited financial or valuation metrics.
+- [ ] Company discussion stays on technology, operations, supply chain, positioning, customers, partnerships, market share, capacity, patents, certification, or maturity.
+- [ ] Images normally total 6-12 and follow `PROMPT.md` §7.
+- [ ] Zero AI-generated images.
+- [ ] Every quantitative claim has a primary source URL or explicit uncertainty qualifier.
+- [ ] 600-900 lines is the normal target; under 400 lines usually feels incomplete.
+- [ ] No self-invented classification system unless grounded in a cited external standard.
+
+### 5.4 Short Section Cleanup
+
+- [ ] Any 2-3 sentence section is merged or deleted unless it is a necessary transition.
+
+### 5.5 Earnings / IR Article Checklist
+
+For articles based on company earnings releases, conference calls, investor presentations, or IR decks:
+
+- [ ] Required current-quarter and prior-quarter release/deck materials were collected and compared; missing required release/deck materials are a fail/research gate.
+- [ ] At least two disappeared prior-quarter highlights were explored, or fewer than two were explicitly stated with wording/order/unit/risk-language checks.
+- [ ] Any YoY-to-QoQ or annual-to-sequential wording shift was checked.
+- [ ] Any unchanged guidance range with worse assumptions was checked.
+- [ ] Repeated cause explanations with changed effect size were checked.
+- [ ] The IR narrative frame was named and paired with a counter-reading.
+- [ ] A counterbalance section such as "진정으로 강해진 것들" corrects over-criticism.
+- [ ] Self-correction did not move only in the direction of optimism.
+- [ ] The `## 한눈에 보기` scorecard appears immediately before the intro, with total score, five axes, and 2-4 sentence evaluation.
+- [ ] Every rendered slide image was directly inspected before captioning.
+- [ ] "single quarter exceeded prior full year" style claims include numerator/denominator verification.
+
+---
+
+This file defines only the minimum floor. Above this floor, article structure should vary by topic.

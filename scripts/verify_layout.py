@@ -51,6 +51,38 @@ EXPECTED_SOURCES_HEADER = [
 ]
 
 
+def require_snippets(errors: list[str], rel: str, text: str, snippets: list[str]) -> None:
+    for snippet in snippets:
+        if snippet not in text:
+            errors.append(f"{rel} missing contract snippet: {snippet}")
+
+
+def schema_has_earnings_scorecard_rule(
+    schema: dict,
+    *,
+    checklist_statuses: set[str],
+    scorecard_type: str,
+) -> bool:
+    for rule in schema.get("allOf", []):
+        condition = rule.get("if", {})
+        properties = condition.get("properties", {})
+        if properties.get("article_type", {}).get("const") != "earnings":
+            continue
+
+        status_condition = properties.get("checklist_status", {})
+        if "const" in status_condition:
+            statuses = {status_condition["const"]}
+        else:
+            statuses = set(status_condition.get("enum", []))
+        if statuses != checklist_statuses:
+            continue
+
+        scorecard = rule.get("then", {}).get("properties", {}).get("scorecard", {})
+        if scorecard.get("type") == scorecard_type:
+            return True
+    return False
+
+
 def main() -> int:
     root = Path(__file__).resolve().parents[1]
     errors: list[str] = []
@@ -80,6 +112,55 @@ def main() -> int:
         schema = json.load(handle)
     if "allOf" not in schema:
         errors.append("article_result schema must define allOf mode-specific conditions")
+    elif not schema_has_earnings_scorecard_rule(
+        schema,
+        checklist_statuses={"pass", "pass_with_warnings"},
+        scorecard_type="object",
+    ):
+        errors.append("article_result schema must require earnings scorecards for pass and pass_with_warnings")
+    elif not schema_has_earnings_scorecard_rule(
+        schema,
+        checklist_statuses={"fail"},
+        scorecard_type="null",
+    ):
+        errors.append("article_result schema must allow null scorecards for failed earnings runs")
+
+    earnings_prompt_text = (root / "prompts/EARNINGS_PROMPT.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "prompts/EARNINGS_PROMPT.md",
+        earnings_prompt_text,
+        [
+            'checklist_status: "fail"',
+            "non-publishable failure note",
+            "At least two disappeared prior-quarter highlights",
+            "fewer than two disappeared highlights",
+            "wording/order/unit/risk-language checks",
+        ],
+    )
+
+    format_text = (root / "prompts/FORMAT.md").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "prompts/FORMAT.md",
+        format_text,
+        [
+            "missing required release/deck materials are a fail/research gate",
+            "At least two disappeared prior-quarter highlights",
+            "fewer than two were explicitly stated with wording/order/unit/risk-language checks",
+        ],
+    )
+
+    earnings_delta_text = (root / ".codex/agents/earnings_delta_analyst.toml").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        ".codex/agents/earnings_delta_analyst.toml",
+        earnings_delta_text,
+        [
+            "Explore at least two disappeared prior-quarter highlights",
+            "If fewer than two disappeared highlights are found",
+        ],
+    )
 
     if errors:
         print("Layout verification failed:")

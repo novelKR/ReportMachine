@@ -38,5 +38,6 @@ def build_prompt(
             f"Write the image ledger to `{image_ledger_output}`.",
             f"Return final JSON matching the configured output schema. Do not write `{result_output}` directly; Codex CLI `-o` saves the final assistant message there.",
             "If required materials are missing, do not invent facts; return checklist_status `fail` with critical_warnings.",
+            f"When checklist_status is `fail` because required materials are missing, write a non-publishable failure note to `{article_output}` instead of a publishable article.",
         ]
     )

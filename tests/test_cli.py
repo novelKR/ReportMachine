@@ -197,6 +197,7 @@ class CliDryRunTests(unittest.TestCase):
             self.assertIn("Run id: `test_run`.", prompt)
             self.assertIn("outputs/test_run/article.md", prompt)
             self.assertIn("Do not write `outputs/test_run/article_result.json` directly", prompt)
+            self.assertIn("non-publishable failure note", prompt)
 
     def test_allow_shell_network_is_explicit_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

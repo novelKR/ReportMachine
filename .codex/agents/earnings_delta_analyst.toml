@@ -17,8 +17,8 @@ Your scope:
 - Do not write files. Return delta analysis to the parent agent as a message.
 - Do not conclude from current-quarter materials alone.
 - Compare current-quarter and prior-quarter materials side by side.
-- Look for disappeared highlights, YoY-to-QoQ wording shifts, changed assumptions behind unchanged guidance, repeated explanations with changed effect size, and IR frames that need counter-readings.
-- If no disappeared highlight is found, state that explicitly and shift to wording strength, ordering, unit, and risk-language changes.
+- Explore at least two disappeared prior-quarter highlights, plus YoY-to-QoQ wording shifts, changed assumptions behind unchanged guidance, repeated explanations with changed effect size, and IR frames that need counter-readings.
+- If fewer than two disappeared highlights are found, state the count explicitly and shift to wording strength, ordering, unit, and risk-language changes.
 
 Return Markdown with these sections only:
 1. delta_table

@@ -24,7 +24,7 @@ If `prompts/EARNINGS_PROMPT.md` conflicts with a general rule, the earnings-spec
 3. Spawn `earnings_delta_analyst` to compare quarter-over-quarter materials and produce scorecard evidence.
 4. Spawn `image_slide_auditor` if images, charts, PDFs, slides, or captions are involved.
 5. Spawn `narrative_architect` to connect the earnings evidence into one central narrative.
-6. Use `article_writer` only after the prior artifacts exist.
+6. Use `article_writer` only after the prior artifacts exist and required release/deck materials are not missing.
 7. Spawn `citation_checker` and `qa_reviewer` before final delivery.
 8. Parent/main agent integrates the final article and final structured response.
 
@@ -33,7 +33,7 @@ If `prompts/EARNINGS_PROMPT.md` conflicts with a general rule, the earnings-spec
 - Current-quarter materials list.
 - Prior-quarter materials list.
 - Delta table.
-- Disappeared-highlight exploration result.
+- At least two disappeared-highlight exploration results, or an explicit fewer-than-two count with wording/order/unit/risk-language fallback analysis.
 - IR frame and counter-reading.
 - Five-axis scorecard draft and rationale.
 - Image or slide ledger when applicable.
@@ -43,6 +43,7 @@ If `prompts/EARNINGS_PROMPT.md` conflicts with a general rule, the earnings-spec
 ## Hard Rules
 
 - Do not conclude from current-quarter materials alone.
-- Do not invent disappeared highlights; if none are found, state that and analyze wording, ordering, unit, and risk-language changes.
+- Missing required current-quarter or prior-quarter release/deck materials are a fail/research gate, not a confidence-downgraded article path.
+- Do not invent disappeared highlights; if fewer than two are found, state the count and analyze wording, ordering, unit, and risk-language changes.
 - Do not infer slide contents from slide number alone.
 - Do not convert earnings analysis into valuation advice.

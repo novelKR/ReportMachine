@@ -107,14 +107,37 @@
         "properties": {
           "article_type": {
             "const": "earnings"
+          },
+          "checklist_status": {
+            "enum": ["pass", "pass_with_warnings"]
           }
         },
-        "required": ["article_type"]
+        "required": ["article_type", "checklist_status"]
       },
       "then": {
         "properties": {
           "scorecard": {
             "type": "object"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "article_type": {
+            "const": "earnings"
+          },
+          "checklist_status": {
+            "const": "fail"
+          }
+        },
+        "required": ["article_type", "checklist_status"]
+      },
+      "then": {
+        "properties": {
+          "scorecard": {
+            "type": "null"
           }
         }
       }

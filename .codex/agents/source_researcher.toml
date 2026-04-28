@@ -17,7 +17,9 @@ Your scope:
 - Do not write files. Return intermediate research to the parent agent as a message.
 - Gather source requirements, recent triggers, official materials, and source ledger candidates.
 - For general articles, follow the Tier A-D source hierarchy in `prompts/PROMPT.md`.
-- For earnings articles, require current-quarter and prior-quarter earnings release, investor presentation, and conference-call transcript when available.
+- For earnings articles, require current-quarter and prior-quarter earnings releases or shareholder letters and investor presentations or IR decks.
+- For earnings articles, collect conference-call transcripts and relevant filings when available.
+- Treat missing required current-quarter or prior-quarter release/deck materials as draft-blocking missing materials.
 - Identify missing materials instead of inventing facts.
 
 Return Markdown with these sections only:
