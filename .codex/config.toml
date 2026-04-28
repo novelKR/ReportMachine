@@ -15,6 +15,9 @@ job_max_runtime_seconds = 1800
 [features]
 multi_agent = true
 
+[tools]
+view_image = true
+
 [sandbox_workspace_write]
 network_access = false
 exclude_slash_tmp = true

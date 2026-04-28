@@ -38,6 +38,17 @@ Shell network access remains disabled by default. Enable it only for runs that n
 python3 scripts/run_article.py --mode earnings --allow-shell-network
 ```
 
+Before Codex runs, the runner preprocesses `inputs/sources.csv` into repo-local source artifacts under `work/runs/{run_id}/`. Local files are copied into `research/sources/`; allowed HTTPS sources are downloaded only when shell network access is explicitly enabled. Downloaded or registered sources are hashed, PDF text/index files are written under `research/pdf_text/` and `research/pdf_index.jsonl`, and rendered PDF page images are inventoried under `images/rendered/` when Poppler tools such as `pdftotext` and `pdftoppm` are available.
+
+Automatic downloads are limited to official or explicitly allowed domains. Add project-specific IR domains in `reportmachine.local.toml`:
+
+```toml
+[profiles.earnings.source_ingest]
+allowed_domains = ["investor.example.com"]
+```
+
+The default remains repo-local only. OpenAI API key is not required for the runner, and OpenAI File Search/vector-store upload is not used by the runner. Codex usage is limited to the CLI subscription-quota surface: `codex exec`, configured `web_search`, and rendered local images passed with `--image`.
+
 ## TOML Presets And External Artifacts
 
 Use `reportmachine.example.toml` as the tracked preset template. Copy it to `reportmachine.local.toml` for machine-specific paths:

@@ -4,7 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.verify_layout import check_release_cleanliness
+from scripts.verify_layout import API_UPLOAD_GUARDED_FILES, check_paid_api_upload_surface, check_release_cleanliness
 
 
 class VerifyLayoutReleaseTests(unittest.TestCase):
@@ -17,6 +17,46 @@ class VerifyLayoutReleaseTests(unittest.TestCase):
         path = root / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
+
+    def write_guarded_files(self, root: Path) -> None:
+        for rel in API_UPLOAD_GUARDED_FILES:
+            self.write_file(root, rel, "local runner code\n")
+
+    def collect_paid_api_errors(self, root: Path) -> list[str]:
+        errors: list[str] = []
+        check_paid_api_upload_surface(root, errors)
+        return errors
+
+    def test_paid_api_guard_rejects_openai_file_upload_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_guarded_files(root)
+            self.write_file(
+                root,
+                "src/reportmachine_runner/cli.py",
+                "response = client.post('/v1/responses')\n",
+            )
+
+            errors = self.collect_paid_api_errors(root)
+
+            self.assertIn(
+                "src/reportmachine_runner/cli.py must not use paid OpenAI API/File Search upload surface: /v1/responses",
+                errors,
+            )
+
+    def test_paid_api_guard_allows_local_quota_runner_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_guarded_files(root)
+            self.write_file(
+                root,
+                "src/reportmachine_runner/codex_exec.py",
+                "command = ['codex', 'exec', '--image', 'rendered.png']\n",
+            )
+
+            errors = self.collect_paid_api_errors(root)
+
+            self.assertEqual(errors, [])
 
     def test_release_blocks_run_scoped_output_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

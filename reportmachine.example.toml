@@ -7,6 +7,14 @@ web_search = "cached"
 allow_shell_network = false
 run_id_prefix = "default"
 
+[profiles.default.source_ingest]
+enabled = true
+allowed_domains = []
+max_download_bytes = 52428800
+pdf_render_dpi = 144
+max_pdf_pages = 40
+max_image_inputs = 20
+
 # Copy this file to reportmachine.local.toml for machine-specific artifact roots.
 # External artifact roots are used only by the runner. They are not exposed to Codex prompts.
 #
@@ -25,3 +33,11 @@ schema = "schemas/article_result.schema.json"
 web_search = "live"
 allow_shell_network = false
 run_id_prefix = "earnings"
+
+[profiles.earnings.source_ingest]
+enabled = true
+allowed_domains = []
+max_download_bytes = 52428800
+pdf_render_dpi = 144
+max_pdf_pages = 40
+max_image_inputs = 20

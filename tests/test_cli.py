@@ -11,6 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from reportmachine_runner import cli
+from reportmachine_runner.source_ingest import SourceIngestResult, build_source_ingest_paths
 
 try:
     from jsonschema import Draft202012Validator
@@ -65,6 +66,15 @@ class CliDryRunTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         return path
+
+    def assert_no_ingest_artifacts_in_prompt(self, prompt: str) -> None:
+        self.assertNotIn("source_ingest_manifest.json", prompt)
+        self.assertNotIn("source_ledger.candidate.csv", prompt)
+        self.assertNotIn("pdf_index.jsonl", prompt)
+        self.assertNotIn("rendered_images.csv", prompt)
+        self.assertNotIn("When source preprocessing is enabled", prompt)
+        self.assertNotIn("Use preprocessed source candidates", prompt)
+        self.assertNotIn("Use PDF search chunks", prompt)
 
     def test_dry_run_does_not_create_default_output_dirs_under_custom_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -259,6 +269,43 @@ run_id_prefix = "custom"
             self.assertIn("inputs/custom-sources.csv", output)
             self.assertIn("schemas/custom-schema.json", output)
 
+    def test_config_profile_can_disable_source_ingest_prompt_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir()
+            self.write_config(
+                root,
+                """
+[profiles.default]
+mode = "industry"
+
+[profiles.default.source_ingest]
+enabled = false
+""".lstrip(),
+            )
+
+            with (
+                patch("reportmachine_runner.cli.run_source_ingest") as run_source_ingest,
+                patch("reportmachine_runner.cli.run_command", return_value=7) as run_command,
+            ):
+                status, _ = self.run_cli(
+                    [
+                        "--project-root",
+                        str(root),
+                        "--config",
+                        "reportmachine.toml",
+                        "--run-id",
+                        "test_run",
+                    ]
+                )
+
+            self.assertEqual(status, 7)
+            run_source_ingest.assert_not_called()
+            prompt = run_command.call_args.args[0][-1]
+            self.assertIn("Source preprocessing is `disabled`.", prompt)
+            self.assertIn("Use `inputs/sources.csv` directly as the source inventory", prompt)
+            self.assert_no_ingest_artifacts_in_prompt(prompt)
+
     def test_cli_values_override_config_profile_values(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
@@ -389,6 +436,64 @@ web_search = "cached"
             self.assertEqual(status, 7)
             command = run_command.call_args.args[0]
             self.assertIn("sandbox_workspace_write.network_access=true", command)
+
+    def test_no_source_ingest_omits_preprocessed_artifact_prompt_references(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            argv = [
+                "--mode",
+                "industry",
+                "--run-id",
+                "test_run",
+                "--project-root",
+                str(root),
+                "--no-source-ingest",
+            ]
+
+            with (
+                patch("reportmachine_runner.cli.run_source_ingest") as run_source_ingest,
+                patch("reportmachine_runner.cli.run_command", return_value=7) as run_command,
+            ):
+                status, _ = self.run_cli(argv)
+
+            self.assertEqual(status, 7)
+            run_source_ingest.assert_not_called()
+            prompt = run_command.call_args.args[0][-1]
+            self.assertIn("Source preprocessing is `disabled`.", prompt)
+            self.assertIn("Use `inputs/sources.csv` directly as the source inventory", prompt)
+            self.assert_no_ingest_artifacts_in_prompt(prompt)
+
+    def test_rendered_ingest_images_are_passed_to_codex_image_input(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            argv = [
+                "--mode",
+                "earnings",
+                "--run-id",
+                "test_run",
+                "--project-root",
+                str(root),
+            ]
+            image_one = "work/runs/test_run/images/rendered/deck_page_001.png"
+            image_two = "work/runs/test_run/images/rendered/deck_page_002.png"
+            ingest_result = SourceIngestResult(
+                paths=build_source_ingest_paths("work/runs/test_run"),
+                image_inputs=(image_one, image_two),
+                manifest={},
+            )
+
+            with (
+                patch("reportmachine_runner.cli.run_source_ingest", return_value=ingest_result),
+                patch("reportmachine_runner.cli.run_command", return_value=7) as run_command,
+            ):
+                status, _ = self.run_cli(argv)
+
+            self.assertEqual(status, 7)
+            command = run_command.call_args.args[0]
+            prompt = command[-1]
+            image_index = command.index("--image")
+            self.assertEqual(command[image_index:], ["--image", image_one, image_two, "--", prompt])
+            self.assertNotIn(f"{image_one},{image_two}", command)
 
     def test_industry_defaults_to_cached_web_search(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

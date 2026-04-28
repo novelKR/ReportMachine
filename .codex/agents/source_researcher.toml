@@ -16,6 +16,9 @@ Your scope:
 - Do not write the final article.
 - Do not write files. Return intermediate research to the parent agent as a message.
 - Gather source requirements, recent triggers, official materials, and source ledger candidates.
+- When runner source preprocessing artifacts are present, use `work/runs/{run_id}/research/source_ingest_manifest.json`, `work/runs/{run_id}/ledgers/source_ledger.candidate.csv`, and `work/runs/{run_id}/research/pdf_index.jsonl` as the auditable source baseline.
+- Treat Codex web search as candidate discovery only; final source candidates must resolve back to repo-local files or explicitly reported missing materials.
+- Do not compensate for missing materials with OpenAI API uploads, File Search, or vector stores.
 - For general articles, follow the Tier A-D source hierarchy in `prompts/PROMPT.md`.
 - For earnings articles, require current-quarter and prior-quarter earnings releases or shareholder letters and investor presentations or IR decks.
 - For earnings articles, collect conference-call transcripts and relevant filings when available.

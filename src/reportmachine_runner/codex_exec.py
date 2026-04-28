@@ -27,9 +27,14 @@ class CodexExecConfig:
     draft_output: str
     image_notes_dir: str
     image_ledger_candidate: str
+    source_ingest_manifest: str
+    source_candidate_ledger: str
+    pdf_index: str
+    rendered_images_ledger: str
     latest_dir: str
     web_search: str
     allow_shell_network: bool
+    image_inputs: tuple[str, ...]
     artifact_sync: ArtifactSyncConfig
     prompt: str
 
@@ -42,10 +47,16 @@ def ensure_output_directories(config: CodexExecConfig) -> None:
         config.image_ledger_output,
         config.draft_output,
         config.image_ledger_candidate,
+        config.source_ingest_manifest,
+        config.source_candidate_ledger,
+        config.pdf_index,
+        config.rendered_images_ledger,
     ]:
         resolve_under_root(config.root, value).parent.mkdir(parents=True, exist_ok=True)
     work_run_dir = resolve_under_root(config.root, config.work_run_dir)
     for name in ["research", "ledgers", "images", "drafts", "reviews"]:
+        (work_run_dir / name).mkdir(parents=True, exist_ok=True)
+    for name in ["research/sources", "research/pdf_text", "images/rendered"]:
         (work_run_dir / name).mkdir(parents=True, exist_ok=True)
 
 
@@ -67,6 +78,8 @@ def build_command(config: CodexExecConfig) -> list[str]:
     ]
     if config.allow_shell_network:
         command.extend(["-c", "sandbox_workspace_write.network_access=true"])
+    if config.image_inputs:
+        command.extend(["--image", *config.image_inputs, "--"])
     command.append(config.prompt)
     return command
 

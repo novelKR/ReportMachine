@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from dataclasses import replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Sequence
@@ -28,6 +29,15 @@ from .config import RunnerProfile, load_profile_config, resolve_config_path
 from .paths import as_posix_arg, find_project_root
 from .paths import resolve_external_root, resolve_under_root
 from .prompt import build_prompt
+from .source_ingest import (
+    DEFAULT_MAX_DOWNLOAD_BYTES,
+    DEFAULT_MAX_IMAGE_INPUTS,
+    DEFAULT_MAX_PDF_PAGES,
+    DEFAULT_PDF_RENDER_DPI,
+    SourceIngestConfig,
+    build_source_ingest_paths,
+    run_source_ingest,
+)
 
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -68,6 +78,38 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Allow shell outbound network in the Codex workspace-write sandbox for this run.",
     )
+    parser.add_argument(
+        "--source-ingest",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="Preprocess sources into run-local ledgers, PDF text, and rendered images before Codex runs.",
+    )
+    parser.add_argument(
+        "--source-domain",
+        action="append",
+        default=None,
+        help="Additional official/allowed HTTPS domain for automatic source downloads. May be repeated.",
+    )
+    parser.add_argument(
+        "--max-download-bytes",
+        type=int,
+        help="Maximum bytes per downloaded source. Defaults to 50 MiB.",
+    )
+    parser.add_argument(
+        "--pdf-render-dpi",
+        type=int,
+        help="DPI for rendered PDF page images. Defaults to 144.",
+    )
+    parser.add_argument(
+        "--max-pdf-pages",
+        type=int,
+        help="Maximum pages per PDF to extract/render. Defaults to 40.",
+    )
+    parser.add_argument(
+        "--max-image-inputs",
+        type=int,
+        help="Maximum rendered images passed to Codex CLI --image. Defaults to 20.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Print the command and prompt without running Codex.")
     parser.add_argument("--smoke-test", action="store_true", help="Build the command and prompt without creating directories or running Codex.")
     return parser
@@ -100,6 +142,15 @@ def choose_bool(cli_value: bool | None, profile_value: bool | None, default: boo
     if profile_value is not None:
         return profile_value
     return default
+
+
+def choose_int(cli_value: int | None, profile_value: int | None, default: int, label: str, parser: argparse.ArgumentParser) -> int:
+    value = cli_value if cli_value is not None else profile_value
+    if value is None:
+        value = default
+    if value < 0:
+        parser.error(f"{label} must be a non-negative integer")
+    return value
 
 
 def build_artifact_sync(
@@ -172,6 +223,36 @@ def main(argv: Sequence[str] | None = None) -> int:
     if web_search not in {"cached", "live", "disabled"}:
         parser.error("web_search must be one of: cached, live, disabled")
     allow_shell_network = choose_bool(args.allow_shell_network, profile.allow_shell_network)
+    source_ingest_enabled = choose_bool(args.source_ingest, profile.source_ingest.enabled, True)
+    source_ingest_allowed_domains = tuple(profile.source_ingest.allowed_domains) + tuple(args.source_domain or ())
+    max_download_bytes = choose_int(
+        args.max_download_bytes,
+        profile.source_ingest.max_download_bytes,
+        DEFAULT_MAX_DOWNLOAD_BYTES,
+        "max_download_bytes",
+        parser,
+    )
+    pdf_render_dpi = choose_int(
+        args.pdf_render_dpi,
+        profile.source_ingest.pdf_render_dpi,
+        DEFAULT_PDF_RENDER_DPI,
+        "pdf_render_dpi",
+        parser,
+    )
+    max_pdf_pages = choose_int(
+        args.max_pdf_pages,
+        profile.source_ingest.max_pdf_pages,
+        DEFAULT_MAX_PDF_PAGES,
+        "max_pdf_pages",
+        parser,
+    )
+    max_image_inputs = choose_int(
+        args.max_image_inputs,
+        profile.source_ingest.max_image_inputs,
+        DEFAULT_MAX_IMAGE_INPUTS,
+        "max_image_inputs",
+        parser,
+    )
     artifact_sync = build_artifact_sync(parser, root, profile)
 
     topic_path = resolve_repo_arg(parser, root, choose_value(args.topic, profile.topic, "inputs/topic.md"), "--topic")
@@ -185,6 +266,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     draft_output = resolve_repo_arg(parser, root, draft_output, "draft output")
     image_notes_dir = resolve_repo_arg(parser, root, image_notes_dir, "image notes directory")
     image_ledger_candidate = resolve_repo_arg(parser, root, image_ledger_candidate, "image ledger candidate")
+    source_ingest_paths = build_source_ingest_paths(work_run_dir)
 
     prompt = build_prompt(
         mode=mode,
@@ -195,6 +277,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         draft_output=as_posix_arg(draft_output),
         image_notes_dir=as_posix_arg(image_notes_dir),
         image_ledger_candidate=as_posix_arg(image_ledger_candidate),
+        source_ingest_manifest=as_posix_arg(source_ingest_paths.manifest),
+        source_candidate_ledger=as_posix_arg(source_ingest_paths.source_candidate_ledger),
+        pdf_index=as_posix_arg(source_ingest_paths.pdf_index),
+        rendered_images_ledger=as_posix_arg(source_ingest_paths.rendered_images_ledger),
+        source_ingest_enabled=source_ingest_enabled,
         article_output=as_posix_arg(article_output),
         source_ledger_output=as_posix_arg(source_ledger_output),
         image_ledger_output=as_posix_arg(image_ledger_output),
@@ -214,9 +301,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         draft_output=as_posix_arg(draft_output),
         image_notes_dir=as_posix_arg(image_notes_dir),
         image_ledger_candidate=as_posix_arg(image_ledger_candidate),
+        source_ingest_manifest=as_posix_arg(source_ingest_paths.manifest),
+        source_candidate_ledger=as_posix_arg(source_ingest_paths.source_candidate_ledger),
+        pdf_index=as_posix_arg(source_ingest_paths.pdf_index),
+        rendered_images_ledger=as_posix_arg(source_ingest_paths.rendered_images_ledger),
         latest_dir="outputs/latest",
         web_search=web_search,
         allow_shell_network=allow_shell_network,
+        image_inputs=(),
         artifact_sync=artifact_sync,
         prompt=prompt,
     )
@@ -243,6 +335,26 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     ensure_output_directories(config)
     import_existing_artifacts(artifact_sync, artifact_paths)
+    if source_ingest_enabled:
+        ingest_result = run_source_ingest(
+            SourceIngestConfig(
+                root=root,
+                mode=mode,
+                run_id=run_id,
+                sources_path=sources_path,
+                work_run_dir=work_run_dir,
+                allow_downloads=allow_shell_network,
+                enabled=source_ingest_enabled,
+                allowed_domains=source_ingest_allowed_domains,
+                max_download_bytes=max_download_bytes,
+                pdf_render_dpi=pdf_render_dpi,
+                max_pdf_pages=max_pdf_pages,
+                max_image_inputs=max_image_inputs,
+            )
+        )
+        if ingest_result.image_inputs:
+            config = replace(config, image_inputs=ingest_result.image_inputs)
+            command = build_command(config)
     snapshot = make_file_snapshot(config)
     snapshot_callback = None
     if artifact_sync.enabled and artifact_sync.snapshot_interval_seconds > 0:

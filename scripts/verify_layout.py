@@ -38,6 +38,7 @@ REQUIRED_FILES = [
     "src/reportmachine_runner/config.py",
     "src/reportmachine_runner/codex_exec.py",
     "src/reportmachine_runner/prompt.py",
+    "src/reportmachine_runner/source_ingest.py",
 ]
 
 EXPECTED_SOURCES_HEADER = [
@@ -80,6 +81,25 @@ RELEASE_ALLOWED_ARTIFACT_NAMES = {
     ".gitkeep",
 }
 
+API_UPLOAD_GUARDED_FILES = [
+    "src/reportmachine_runner/cli.py",
+    "src/reportmachine_runner/codex_exec.py",
+    "src/reportmachine_runner/config.py",
+    "src/reportmachine_runner/prompt.py",
+    "src/reportmachine_runner/source_ingest.py",
+]
+
+FORBIDDEN_PAID_API_SNIPPETS = [
+    "/v1/responses",
+    "/v1/files",
+    "vector_store",
+    "vector_stores",
+    "OpenAI(",
+    "AsyncOpenAI(",
+    "import openai",
+    "from openai import",
+]
+
 
 def is_top_level_release_excluded_path(
     relative_parts: tuple[str, ...],
@@ -94,6 +114,16 @@ def require_snippets(errors: list[str], rel: str, text: str, snippets: list[str]
     for snippet in snippets:
         if snippet not in text:
             errors.append(f"{rel} missing contract snippet: {snippet}")
+
+
+def check_paid_api_upload_surface(root: Path, errors: list[str]) -> None:
+    for rel in API_UPLOAD_GUARDED_FILES:
+        text = (root / rel).read_text(encoding="utf-8")
+        for snippet in FORBIDDEN_PAID_API_SNIPPETS:
+            if snippet in text:
+                errors.append(
+                    f"{rel} must not use paid OpenAI API/File Search upload surface: {snippet}"
+                )
 
 
 def schema_has_earnings_scorecard_rule(
@@ -179,6 +209,7 @@ def main() -> int:
         'project_root_markers = [".git", ".article-root"]',
         'web_search = "cached"',
         "allow_login_shell = false",
+        "view_image = true",
         "network_access = false",
         'sandbox = "elevated"',
     ]:
@@ -203,12 +234,30 @@ def main() -> int:
         [
             "--config reportmachine.example.toml --profile default --smoke-test",
             "External artifact roots are runner-only",
+            "OpenAI API key is not required",
+            "OpenAI File Search/vector-store upload is not used by the runner",
         ],
     )
 
     codex_exec_text = (root / "src/reportmachine_runner/codex_exec.py").read_text(encoding="utf-8")
     if "--full-auto" in codex_exec_text:
         errors.append("runner command must not use --full-auto")
+    check_paid_api_upload_surface(root, errors)
+
+    source_ingest_text = (root / "src/reportmachine_runner/source_ingest.py").read_text(encoding="utf-8")
+    if '"openai_file_search": "disabled"' not in source_ingest_text:
+        errors.append("source ingest manifest must keep openai_file_search disabled")
+
+    prompt_text = (root / "src/reportmachine_runner/prompt.py").read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "src/reportmachine_runner/prompt.py",
+        prompt_text,
+        [
+            "OpenAI API/File Search/vector store uploads are disabled",
+            "openai_file_search = disabled",
+        ],
+    )
 
     with (root / "inputs/sources.csv").open(newline="", encoding="utf-8") as handle:
         reader = csv.reader(handle)

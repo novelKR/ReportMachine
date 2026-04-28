@@ -12,8 +12,17 @@ PROFILE_KEYS = {
     "schema",
     "web_search",
     "allow_shell_network",
+    "source_ingest",
     "run_id_prefix",
     "artifacts",
+}
+SOURCE_INGEST_KEYS = {
+    "enabled",
+    "allowed_domains",
+    "max_download_bytes",
+    "pdf_render_dpi",
+    "max_pdf_pages",
+    "max_image_inputs",
 }
 ARTIFACT_KEYS = {
     "external_root",
@@ -34,6 +43,16 @@ class ArtifactProfile:
 
 
 @dataclass(frozen=True)
+class SourceIngestProfile:
+    enabled: bool | None = None
+    allowed_domains: tuple[str, ...] = ()
+    max_download_bytes: int | None = None
+    pdf_render_dpi: int | None = None
+    max_pdf_pages: int | None = None
+    max_image_inputs: int | None = None
+
+
+@dataclass(frozen=True)
 class RunnerProfile:
     mode: str | None = None
     topic: str | None = None
@@ -41,6 +60,7 @@ class RunnerProfile:
     schema: str | None = None
     web_search: str | None = None
     allow_shell_network: bool | None = None
+    source_ingest: SourceIngestProfile = SourceIngestProfile()
     run_id_prefix: str | None = None
     artifacts: ArtifactProfile = ArtifactProfile()
 
@@ -89,6 +109,27 @@ def _interval(value: Any, label: str) -> int:
     return value
 
 
+def _optional_non_negative_int(value: Any, label: str) -> int | None:
+    if value is None:
+        return None
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{label} must be a non-negative integer")
+    return value
+
+
+def _optional_string_tuple(value: Any, label: str) -> tuple[str, ...]:
+    if value is None:
+        return ()
+    if not isinstance(value, list):
+        raise ValueError(f"{label} must be a list of non-empty strings")
+    values: list[str] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip():
+            raise ValueError(f"{label}[{index}] must be a non-empty string")
+        values.append(item)
+    return tuple(values)
+
+
 def _validate_keys(table: dict[str, Any], allowed: set[str], label: str) -> None:
     unknown = sorted(set(table) - allowed)
     if unknown:
@@ -131,6 +172,15 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
         ARTIFACT_KEYS,
         f"profiles.{profile_name}.artifacts",
     )
+    source_ingest_table = _require_mapping(
+        profile.get("source_ingest", {}),
+        f"profiles.{profile_name}.source_ingest",
+    )
+    _validate_keys(
+        source_ingest_table,
+        SOURCE_INGEST_KEYS,
+        f"profiles.{profile_name}.source_ingest",
+    )
 
     artifacts = ArtifactProfile(
         external_root=_optional_string(
@@ -157,6 +207,32 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
             True,
         ),
     )
+    source_ingest = SourceIngestProfile(
+        enabled=_optional_bool(
+            source_ingest_table.get("enabled"),
+            f"profiles.{profile_name}.source_ingest.enabled",
+        ),
+        allowed_domains=_optional_string_tuple(
+            source_ingest_table.get("allowed_domains"),
+            f"profiles.{profile_name}.source_ingest.allowed_domains",
+        ),
+        max_download_bytes=_optional_non_negative_int(
+            source_ingest_table.get("max_download_bytes"),
+            f"profiles.{profile_name}.source_ingest.max_download_bytes",
+        ),
+        pdf_render_dpi=_optional_non_negative_int(
+            source_ingest_table.get("pdf_render_dpi"),
+            f"profiles.{profile_name}.source_ingest.pdf_render_dpi",
+        ),
+        max_pdf_pages=_optional_non_negative_int(
+            source_ingest_table.get("max_pdf_pages"),
+            f"profiles.{profile_name}.source_ingest.max_pdf_pages",
+        ),
+        max_image_inputs=_optional_non_negative_int(
+            source_ingest_table.get("max_image_inputs"),
+            f"profiles.{profile_name}.source_ingest.max_image_inputs",
+        ),
+    )
 
     return RunnerProfile(
         mode=_optional_string(profile.get("mode"), f"profiles.{profile_name}.mode"),
@@ -171,6 +247,7 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
             profile.get("allow_shell_network"),
             f"profiles.{profile_name}.allow_shell_network",
         ),
+        source_ingest=source_ingest,
         run_id_prefix=_optional_string(
             profile.get("run_id_prefix"),
             f"profiles.{profile_name}.run_id_prefix",

@@ -18,6 +18,7 @@ Your scope:
 - Do not edit `prompts/`, `.codex/`, `.agents/`, `schemas/`, or final article files.
 - Never infer slide contents from slide number alone.
 - If rendered slide images are available, inspect the actual image before proposing captions.
+- Prefer runner-rendered image inventory from `work/runs/{run_id}/ledgers/rendered_images.csv` and preserve the source PDF hash/page linkage in image notes.
 - Keep only images that add information and connect to the immediately surrounding article logic.
 - Reject decorative images, logo collages, low-information marketing renders, and AI-generated images.
 
