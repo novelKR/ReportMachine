@@ -171,7 +171,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 self.write_claim_map_rows(cwd, config, rows)
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -214,7 +214,7 @@ class SummaryWorkflowTests(unittest.TestCase):
             self.write_summary_schema(root)
             config = build_summary_run_config(root=root, run_id="test_run")
 
-            with patch("reportmachine_runner.summary.run_command") as run_command:
+            with patch("reportmachine_runner.summary_workflow.run_command") as run_command:
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -270,7 +270,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 )
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 0)
@@ -315,7 +315,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 )
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -366,7 +366,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 )
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -480,7 +480,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 )
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -531,7 +531,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                 )
                 return 0
 
-            with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+            with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                 status = run_summary_workflow(config)
 
             self.assertEqual(status, 2)
@@ -572,7 +572,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                         self.write_success_summary_result(cwd, config, hashes)
                         return 0
 
-                    with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+                    with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                         status = run_summary_workflow(config)
 
                     self.assertEqual(status, 2)
@@ -610,7 +610,7 @@ class SummaryWorkflowTests(unittest.TestCase):
                         )
                         return 0
 
-                    with patch("reportmachine_runner.summary.run_command", side_effect=fake_run):
+                    with patch("reportmachine_runner.summary_workflow.run_command", side_effect=fake_run):
                         status = run_summary_workflow(config)
 
                     self.assertEqual(status, 2)

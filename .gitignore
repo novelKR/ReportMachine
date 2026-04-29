@@ -2,6 +2,7 @@
 reportmachine.local.toml
 .DS_Store
 .tmp/
+.tmp_audit/
 /tmp*/
 work/runs/
 work/**/*.md

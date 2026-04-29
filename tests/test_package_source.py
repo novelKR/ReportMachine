@@ -37,13 +37,26 @@ class PackageSourceTests(unittest.TestCase):
         rels = {raw_rel for raw_rel in process.stdout.decode("utf-8").split("\0") if raw_rel}
         for rel in [
             "scripts/package_source.py",
+            "scripts/layout_contract.py",
             "tests/test_package_source.py",
             "schemas/preflight_result.schema.json",
             "schemas/claim_ledger.schema.json",
             "src/reportmachine_runner/audit.py",
             "src/reportmachine_runner/manifest.py",
+            "src/reportmachine_runner/pdf_processing.py",
             "src/reportmachine_runner/preflight.py",
+            "src/reportmachine_runner/run_config_builder.py",
+            "src/reportmachine_runner/run_context.py",
+            "src/reportmachine_runner/run_outputs.py",
             "src/reportmachine_runner/schema_validation.py",
+            "src/reportmachine_runner/source_fetch.py",
+            "src/reportmachine_runner/source_ingest_paths.py",
+            "src/reportmachine_runner/source_ledgers.py",
+            "src/reportmachine_runner/summary_contracts.py",
+            "src/reportmachine_runner/summary_prompt.py",
+            "src/reportmachine_runner/summary_validation.py",
+            "src/reportmachine_runner/summary_workflow.py",
+            "src/reportmachine_runner/workflow.py",
         ]:
             if (PROJECT_ROOT / rel).exists():
                 rels.add(rel)
@@ -136,6 +149,7 @@ class PackageSourceTests(unittest.TestCase):
             names = self.archive_names(archives[0])
             self.assertIn(prefix + "README.md", names)
             self.assertIn(prefix + "scripts/package_source.py", names)
+            self.assertIn(prefix + "scripts/layout_contract.py", names)
             self.assertIn(prefix + "scripts/verify_layout.py", names)
 
     def test_ignored_generated_files_and_local_config_are_omitted(self) -> None:

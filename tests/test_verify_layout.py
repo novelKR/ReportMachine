@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.verify_layout import API_UPLOAD_GUARDED_FILES, check_paid_api_upload_surface, check_release_cleanliness
+from scripts.layout_contract import API_UPLOAD_GUARDED_FILES, check_paid_api_upload_surface, check_release_cleanliness
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+
+def count_tests(suite: unittest.TestSuite) -> int:
+    return suite.countTestCases()
 
 
 class VerifyLayoutReleaseTests(unittest.TestCase):
@@ -57,6 +65,66 @@ class VerifyLayoutReleaseTests(unittest.TestCase):
             errors = self.collect_paid_api_errors(root)
 
             self.assertEqual(errors, [])
+
+    def test_verify_layout_is_importable_as_module(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-c", "import scripts.verify_layout"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_verify_layout_runs_as_module(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "-m", "scripts.verify_layout"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Layout OK", result.stdout)
+
+    def test_verify_layout_runs_as_direct_script(self) -> None:
+        result = subprocess.run(
+            [sys.executable, "scripts/verify_layout.py"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Layout OK", result.stdout)
+
+    def test_test_cli_wrapper_loads_split_suite_for_exact_targeted_pattern(self) -> None:
+        from tests import test_cli
+
+        loader = unittest.TestLoader()
+        empty_suite = unittest.TestSuite()
+
+        targeted_suite = test_cli.load_tests(loader, empty_suite, "test_cli.py")
+        split_suite = test_cli.load_tests(loader, unittest.TestSuite(), None)
+
+        self.assertGreater(count_tests(targeted_suite), 0)
+        self.assertEqual(count_tests(targeted_suite), count_tests(split_suite))
+
+    def test_test_cli_wrapper_preserves_split_discovery_without_duplication(self) -> None:
+        from tests import test_cli
+
+        loader = unittest.TestLoader()
+        existing_suite = unittest.TestSuite([unittest.TestSuite()])
+
+        discovered_suite = test_cli.load_tests(loader, existing_suite, "test_cli*.py")
+
+        self.assertIs(discovered_suite, existing_suite)
 
     def test_release_blocks_run_scoped_output_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
