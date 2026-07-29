@@ -1,17 +1,19 @@
 from __future__ import annotations
 
 import csv
+import importlib.util
 import io
 import json
 import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr, redirect_stdout
+from contextlib import ExitStack, redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
 from reportmachine_runner import cli
+from reportmachine_runner import workflow as workflow_module
 from reportmachine_runner.intake import SOURCE_DISCOVERY_REQUIRED_ID
 from reportmachine_runner.source_ingest import SourceIngestResult, build_source_ingest_paths
 from reportmachine_runner.summary import (
@@ -28,10 +30,29 @@ except ModuleNotFoundError:
 
 
 class CliHarness(unittest.TestCase):
+    # Most CLI tests here run the default `all` phase and stub out Codex
+    # execution, so they never reach the finalize-phase schema validation that
+    # needs the real dependency. They may therefore bypass the early gate when
+    # the dependency is absent. Tests asserting gate behavior opt out.
+    bypass_schema_dependency_gate = True
+
     def run_cli(self, argv: list[str]) -> tuple[int, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with ExitStack() as stack:
+            stack.enter_context(redirect_stdout(stdout))
+            stack.enter_context(redirect_stderr(stderr))
+            if (
+                self.bypass_schema_dependency_gate
+                and importlib.util.find_spec("jsonschema") is None
+            ):
+                stack.enter_context(
+                    patch.object(
+                        workflow_module,
+                        "schema_validation_dependency_error",
+                        return_value=None,
+                    )
+                )
             try:
                 status = cli.main(argv)
             except SystemExit as exc:

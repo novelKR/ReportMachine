@@ -36,6 +36,7 @@ from .run_outputs import (
     write_preflight_failure_outputs,
     write_run_summary_log,
 )
+from .schema_validation import schema_validation_dependency_error
 from .source_ingest import SourceIngestConfig, run_source_ingest
 from .summary import build_summary_command, build_summary_prompt, mirror_latest_summary, run_summary_workflow
 
@@ -374,6 +375,15 @@ def run_article_workflow(parser: argparse.ArgumentParser, args: argparse.Namespa
     if args.dry_run or args.smoke_test:
         _print_dry_run(args, context, configs)
         return 0
+
+    if context.phase in {"finalize", "all"}:
+        # Only finalize-phase audits validate JSON artifacts against schemas.
+        # Gate here so `all` fails before the draft Codex call spends budget,
+        # while prepare/draft (including --prepare-only) stay runnable.
+        dependency_error = schema_validation_dependency_error()
+        if dependency_error:
+            print(dependency_error, file=sys.stderr)
+            return 2
 
     if context.intake_brief:
         write_intake_files(

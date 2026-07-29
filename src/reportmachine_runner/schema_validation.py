@@ -1,11 +1,34 @@
 from __future__ import annotations
 
+import importlib.util
 import json
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 from .paths import resolve_under_root
+
+
+SCHEMA_VALIDATION_PACKAGE = "jsonschema"
+SCHEMA_VALIDATION_INSTALL_HINT = (
+    f"missing required runtime dependency: {SCHEMA_VALIDATION_PACKAGE}. "
+    "Schema validation of final artifacts cannot run without it. "
+    "Install project dependencies first: python3 -m pip install -e ."
+)
+
+
+def schema_validation_dependency_error() -> str | None:
+    """Return an actionable message when schema validation cannot run.
+
+    Callers should probe this only before article finalize-phase work, which is
+    where JSON artifacts are validated against schemas. The summary workflow
+    intentionally skips this probe because its validation is hand-written CSV
+    and JSON checking that never imports the schema-validation package.
+    """
+
+    if importlib.util.find_spec(SCHEMA_VALIDATION_PACKAGE) is None:
+        return SCHEMA_VALIDATION_INSTALL_HINT
+    return None
 
 
 def _format_json_path(parts: Iterable[object]) -> str:

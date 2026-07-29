@@ -9,6 +9,7 @@ RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 RUN_ID_REQUIREMENT = (
     "must start with an ASCII letter or digit and may also contain underscore, hyphen, and dot"
 )
+RESERVED_RUN_IDS = frozenset({"latest"})
 
 
 def find_project_root(start: Path | None = None) -> Path:
@@ -49,6 +50,8 @@ def resolve_under_root(root: Path, value: str) -> Path:
 def validate_run_id(value: str, label: str = "--run-id") -> str:
     if not RUN_ID_PATTERN.fullmatch(value):
         raise ValueError(f"{label} {RUN_ID_REQUIREMENT}")
+    if value.casefold() in RESERVED_RUN_IDS:
+        raise ValueError(f"{label} must not use the reserved name '{value.casefold()}'")
     return value
 
 

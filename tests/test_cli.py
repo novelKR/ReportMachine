@@ -10,6 +10,7 @@ _SPLIT_MODULES = [
     "tests.test_cli_execution",
     "tests.test_cli_artifacts",
     "tests.test_cli_summary_integration",
+    "tests.test_cli_prerequisites",
 ]
 
 
