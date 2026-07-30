@@ -14,50 +14,70 @@ Turn a short chat request such as "AI 데이터센터 전력 인프라 병목과
 Read these before planning or execution:
 
 - `AGENTS.md`
-- `inputs/topic.md`
-- `inputs/sources.csv`
-- `README.md` runner section
+- `docs/USAGE.ko.md`
+- `prompts/core/MODE_CONTRACT.md`
+- `schemas/intent_contract.schema.json`
+- `inputs/topic.md` and `inputs/sources.csv`
 
 For the final article workflow, route to `$industry-article` or `$earnings-article` after intake is approved.
 
 ## Intake Workflow
 
 1. Classify the likely mode: `industry` for technology, supply chain, regulation, or market-structure topics; `earnings` only for already published earnings, IR deck, filing, or conference-call work.
-2. Ask only for missing high-impact fields: article mode, central question, recent trigger, required source material, output shape, and whether to mirror generated inputs to `inputs/`.
-3. In Plan Mode, do not write files or run commands. Produce a complete `<proposed_plan>` with the chosen run id, input persistence target, execution path, and missing source risks.
-4. After user approval in Default mode, write run-local inputs by using `scripts/run_article.py` intake flags or by creating equivalent files under `work/runs/{run_id}/intake/`.
-5. If the user explicitly approves mirroring, also pass `--intake-mirror-inputs` or update `inputs/topic.md` and `inputs/sources.csv`.
-6. If exact source URLs or repo-local source files are not provided, keep the generated `sources.csv` source-discovery row and state that quantitative claims remain blocked until primary sources are found or uncertainty qualifiers are used.
+2. Preserve the user's original request verbatim. Extract the central question, every required subject and comparison target, requested time range, recent trigger, and requested conclusion shape.
+3. Ask only for missing high-impact choices: mode, analysis modes, depth, required source material, output shape, and whether to mirror generated inputs to `inputs/`.
+4. In Plan Mode, do not write files or run commands. Choose a new, collision-resistant run id and produce a complete `<proposed_plan>` with the verbatim request, normalized scope, proposed exclusions with reasons, input persistence target, execution path, and source risks. Never reuse an existing run directory unless the user explicitly asks to resume it.
+5. After explicit approval in Default mode, use the runner intake flags to write run-local inputs and the intent contract. Pass `--intake-approve-scope` only for the scope the user actually approved.
+6. If the user approves mirroring, pass `--intake-mirror-inputs`; otherwise keep all generated intake files run-local.
+7. If exact source URLs or repo-local source files are absent, retain the source-discovery row and state that discovery is not evidence. Do not approve unsupported quantitative claims.
+8. Run `--phase all` only after approval. If the scope guardian reports a new material delta, stop and return that delta to the user.
 
 ## Execution Routing
 
 Preferred CLI path when `codex` is available:
 
 ```bash
-python3 scripts/run_article.py --mode industry --run-id {run_id} \
+python3 scripts/run_article.py --mode {mode} --run-id {run_id} \
+  --intake-original-request "{verbatim_request}" \
   --intake-topic "{topic}" \
   --intake-core-question "{core_question}" \
   --intake-recent-trigger "{recent_trigger}" \
   --intake-source-note "{source_note}" \
-  --intake-output-notes "{output_notes}"
+  --intake-output-notes "{output_notes}" \
+  --intake-analysis-mode {analysis_mode} \
+  --intake-depth {depth} \
+  --intake-approve-scope
 ```
 
 App-native fallback when `codex` CLI is unavailable:
 
 ```bash
-python3 scripts/run_article.py --prepare-only --mode industry --run-id {run_id} \
+python3 scripts/run_article.py --prepare-only --mode {mode} --run-id {run_id} \
+  --intake-original-request "{verbatim_request}" \
   --intake-topic "{topic}" \
   --intake-core-question "{core_question}" \
   --intake-recent-trigger "{recent_trigger}" \
   --intake-source-note "{source_note}" \
-  --intake-output-notes "{output_notes}"
+  --intake-output-notes "{output_notes}" \
+  --intake-analysis-mode {analysis_mode} \
+  --intake-depth {depth} \
+  --intake-approve-scope
 ```
 
-Then use `work/runs/{run_id}/prepare_manifest.json` as the current-session execution prompt and write final outputs under `outputs/{run_id}/` according to `AGENTS.md`.
+Repeat `--intake-analysis-mode` for every approved mode. For multiline requests or text containing shell-sensitive characters, prefer `--intake-original-request-file {repo_relative_path}` and preserve its bytes unchanged.
+
+Then use `work/runs/{run_id}/prepare_manifest.json`, execute the app-native role flow from `AGENTS.md`, serialize read-only role results, and finish with `scripts/run_article.py --mode {mode} --phase audit --run-id {run_id} --allow-unprovenanced-audit`.
+
+The explicit waiver is only for this checkpoint-free App-native path. It records `provenance_status: waived_no_checkpoint`, never updates `outputs/latest/`, and never backfills provenance. Do not use it to excuse a marker, a partial or corrupt checkpoint set, or any finalize checkpoint mismatch.
+
+The runner's exact-output allowlist, role-attempt cleanup, and `outputs/latest` restoration apply to runner-managed CLI role calls, not to direct App-native role execution. In the App-native flow, keep `outputs/latest` untouched, use `reviews/image_audit.json` as the only image-decision artifact, never create an image-ledger candidate, and provide rendered image inputs only to `image_slide_auditor`.
 
 ## Hard Rules
 
 - Do not invent source URLs, numbers, recent triggers, or author experiences during intake.
 - Do not treat source discovery as evidence.
 - Do not run the full workflow before the user approves the intake plan.
+- Do not silently drop a subject, comparison target, time range, or requested analysis mode from the original request.
+- Do not approve a material scope change on the user's behalf.
 - Keep generated artifacts under `work/runs/{run_id}/`, `outputs/{run_id}/`, or `outputs/latest/`.
+- Do not treat those broad directories as CLI role output permissions. The runner creates declared output parents and permits only exact regular-file outputs.

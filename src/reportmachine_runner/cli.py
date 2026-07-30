@@ -3,13 +3,30 @@ from __future__ import annotations
 import argparse
 from typing import Sequence
 
+from .phase_contracts import ANALYSIS_MODES, DEPTH_CHOICES, PHASE_CHOICES
 from .workflow import run_article_workflow
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the ReportMachine Codex article workflow.")
     parser.add_argument("--mode", choices=["industry", "earnings", "preview"], help="Article workflow mode. Required unless the selected config profile provides it.")
-    parser.add_argument("--phase", choices=["prepare", "draft", "finalize", "all"], default="all", help="Workflow phase to run. Defaults to all.")
+    parser.add_argument(
+        "--phase",
+        choices=list(PHASE_CHOICES),
+        default="all",
+        help=(
+            "Workflow phase to run. Phases run in order: prepare, scope, research-plan, research, "
+            "evidence, narrative, draft, review, revise, finalize, audit. Defaults to all."
+        ),
+    )
+    parser.add_argument(
+        "--allow-unprovenanced-audit",
+        action="store_true",
+        help=(
+            "Allow a code-only audit when the run has neither a provenance marker nor any "
+            "checkpoint. The result is recorded as waived and never promoted to outputs/latest."
+        ),
+    )
     parser.add_argument("--config", help="TOML runner preset file. Relative paths are resolved from the project root.")
     parser.add_argument("--profile", default="default", help="Profile name under [profiles.<name>] in the TOML preset.")
     parser.add_argument("--run-id", help="Run id used for work/runs/{run_id} and outputs/{run_id}. Defaults to current UTC timestamp.")
@@ -96,6 +113,52 @@ def build_parser() -> argparse.ArgumentParser:
         help="Also mirror generated intake files to inputs/topic.md and inputs/sources.csv.",
     )
     parser.add_argument(
+        "--intake-original-request",
+        help="Verbatim user request text. Preserved for the scope gate and intent contract.",
+    )
+    parser.add_argument(
+        "--intake-original-request-file",
+        help="Path to a file holding the verbatim user request. Relative paths resolve from the project root.",
+    )
+    parser.add_argument(
+        "--intake-approve-scope",
+        action="store_true",
+        help="Record user approval of the normalized scope so drafting phases may run unattended.",
+    )
+    parser.add_argument(
+        "--intake-reset-intent-contract",
+        action="store_true",
+        help=(
+            "Back up and replace a malformed or wrong-run intent contract with a pending "
+            "contract for the current run. Scope approval remains a separate step."
+        ),
+    )
+    parser.add_argument(
+        "--intake-depth",
+        choices=list(DEPTH_CHOICES),
+        default=None,
+        help="Analytical depth for this run. Defaults to standard. Replaces line-count targets.",
+    )
+    parser.add_argument(
+        "--intake-analysis-mode",
+        action="append",
+        choices=list(ANALYSIS_MODES),
+        default=None,
+        help="Approved analysis mode. May be repeated, for example market_reaction plus company_fundamental.",
+    )
+    parser.add_argument(
+        "--waive-blocked-source",
+        action="append",
+        default=None,
+        help="Downgrade a blocked required source to a warning by source id. May be repeated.",
+    )
+    parser.add_argument(
+        "--max-extra-research-rounds",
+        type=int,
+        default=None,
+        help="Maximum extra targeted research rounds when p0 evidence gaps remain. Defaults to 1.",
+    )
+    parser.add_argument(
         "--prepare-only",
         action="store_true",
         help="Prepare directories, source ingest artifacts, and a prompt manifest without running Codex.",
@@ -110,6 +173,12 @@ def build_parser() -> argparse.ArgumentParser:
         action=argparse.BooleanOptionalAction,
         default=None,
         help="After a successful article run, generate derivative A4 summary output under outputs/{run_id}/summary.",
+    )
+    parser.add_argument(
+        "--publish-pdf",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="After a successful article run, render a reader-friendly A4 PDF under outputs/{run_id}/publish.",
     )
     parser.add_argument("--dry-run", action="store_true", help="Print the command and prompt without running Codex.")
     parser.add_argument("--smoke-test", action="store_true", help="Build the command and prompt without creating directories or running Codex.")

@@ -28,17 +28,70 @@ python3 scripts/run_article.py --mode earnings --smoke-test
 python3 scripts/run_article.py --config reportmachine.example.toml --profile default --smoke-test
 ```
 
-Default outputs are written under `outputs/{run_id}/`. After a successful validated run, `outputs/latest/` is refreshed from that run.
+Default outputs are written under `outputs/{run_id}/`. `outputs/latest/` is refreshed only after a successful audit with verified finalize provenance; a provenance waiver never refreshes it.
 
-The article runner is phase-gated. The default is `--phase all`, which runs `prepare -> draft -> finalize`. You can stop after the local gate, run a draft-only Codex pass, or finalize an existing draft:
+The article runner is phase-gated and drives one agent role per phase. The default `--phase all` runs:
+
+```text
+prepare -> scope -> research-plan -> research -> evidence -> narrative
+       -> draft -> review -> revise -> finalize -> audit
+```
+
+Each phase requires its upstream artifacts to exist and validate against `schemas/`, and each role invocation records an envelope under `work/runs/{run_id}/agents/`. Drafting stays blocked until the run's intent contract records scope approval.
+
+Each completed model phase records a provenance checkpoint under `work/runs/{run_id}/provenance/` once its outputs and semantics validate. The code-only `audit` phase does not create one. Resuming a single model phase re-checks the previous phase's checkpoint before any model call, so an artifact edited after its producing role ran stops the run instead of feeding a stale downstream phase. One phase contract defines what is protected: the cumulative outputs plus the inputs a phase's roles actually read, including the normalized topic and source inventory. The finalize checkpoint also protects the schema-validated `article_result.json`, so later changes to its title, warnings, checklist state, or output metadata break provenance.
+
+The runner ledgers are tracked per row, covering every column except the `fetched_at` timestamp. Editing or removing a recorded row fails. A row the checkpoint never recorded is accepted only when an ingest receipt under `work/runs/{run_id}/provenance/ingest/` proves the runner produced it. `prepare` replaces its receipt with the rows its ingest rewrote; `research` and `evidence` carry forward only still-valid identical rows and add only the before/after delta the current ingest actually wrote. Pre-existing unreceipted, tampered, or unrelated rows are never absorbed. Re-running a phase invalidates its checkpoint and downstream checkpoints, but preserves receipts; a preserved receipt counts as evidence only while its recorded input hashes and row digests still match.
+
+The same input contract backs both the checkpoint and each role's attempt envelope, so a role that reads the intent contract, the extracted source text, the rendered image ledger, the audited image decisions, or the source inventory records it as an input.
+
+The provenance records and the run manifest are frozen while any role runs: changing, creating, or deleting one fails the phase, so a role cannot forge the evidence that judges it. Before a CLI role starts, the runner creates the parent directories for its declared outputs. The role may then write only those exact paths, and every declared output must be absent or a regular file before the call and a regular file afterward. A symlink, directory, or special-file output is rejected; broad run, output, log, and latest directory prefixes never grant role write access. The runner performs the write-scope check and closes the attempt record on every catchable outcome, including success, nonzero exit, timeout, exception, keyboard interrupt, and cancellation.
+
+Pipeline roles run only on POSIX hosts. Each role gets a dedicated session and process group, and the runner terminates and verifies the whole group before inspecting or restoring repository state; a non-POSIX role request fails preflight with status 2 and a failed attempt record. Event and stderr logs remain runner-owned append-only files: their pre-call bytes and file identity must survive, while ordinary stdout/stderr appends are allowed. Non-role summary and publish commands retain their existing execution path.
+
+`outputs/latest` is never role-writable. Before a role call its root must be absent or a real directory; a root symlink, regular file, or special file is a pre-call hard failure. For a real directory, the runner snapshots its entry types, regular-file bytes, and symlink target text without following symlinks. A catchable role failure, write-scope violation, or latest drift triggers restore and re-verification in the cleanup path. Restore failure exits with status 2 and prevents the phase checkpoint, final export, successful audit, and latest promotion.
+
+The phase guard also protects cumulative tracked artifacts, the canonical source and rendered-image ledgers, and the extracted text or rendered images derived from those ledgers. Only the runner's candidate-merge and source-ingest operations receive narrowly scoped mutation allowances. An upstream violation fails the phase before a checkpoint or later success gate can be recorded. Ordinary phase-owned artifacts retain precise earliest-producer guidance. A canonical ledger or ledger-derived file mutation always requires `--phase all`, because receipt row lineage does not prove a safe partial-recovery point; missing, invalid, or ambiguous lineage is handled the same way.
+
+These checks assume one runner, no concurrent reader of in-flight artifacts, and a catchable process exit. They detect and fail closed on catchable role behavior, but they do not provide full rollback for upstream edits, execution outside a real-repository staging area, multi-file commit journaling, `kill -9` or host-crash recovery, same-run locking, or hostile-role isolation for writes outside the repository, network activity, and secrets. `outputs/latest` is the only tree restored by this boundary.
+
+Checkpoints are not backfilled: a run created before them must be resumed with `--phase all`, or from the earliest model phase you need. Once a run records its first checkpoint, the run manifest keeps a `provenance_marker` that outlives the provenance directory. By default, `--phase audit` requires a matching finalize checkpoint; a run with neither marker nor checkpoint files fails with exit code 2 after the runner still writes a fresh `final_sync_report.json`, and it cannot refresh `outputs/latest/`.
+
+For an intentional code-only audit of a historical or App-native run that never had provenance, add the CLI-only `--allow-unprovenanced-audit` flag. If every other audit check passes, the run records `provenance_status: waived_no_checkpoint` and overall status `audit_passed_with_provenance_waiver`, but it still cannot refresh `outputs/latest/`. The waiver applies only when both the marker and every checkpoint file are absent. A marker or even one checkpoint file makes partial, corrupt, non-object, missing-finalize, or mismatched provenance non-waivable and the audit fails. The flag never backfills a checkpoint.
+
+Research-discovered sources go through a second runner-owned ingest before evidence verification. The runner assigns source ids and statuses, downloads or copies allowed material into the run, hashes it, and writes visible HTML or extracted PDF text under `work/runs/{run_id}/research/extracted_text/`. Blocked or remote-unverified candidates cannot silently become verified evidence. Separately invoked later phases reuse this enriched ingest snapshot; rerun `prepare` when the base source inventory itself must be refreshed.
+
+`work/runs/{run_id}/reviews/image_audit.json` is the sole canonical image-decision artifact; an image-ledger candidate is not part of the contract. Only `image_slide_auditor` receives rendered image inputs. Revision and finalization consume the audit report as a file input, and the final image ledger is cross-checked against both that report and the canonical rendered-image ledger. Its shared decision fields and `caption_candidate` must match the report. A final `caption` may be adapted to the frozen article context, but it must preserve the canonical candidate and pass the existing numeric, evidence, source-metadata, and render-metadata checks.
+
+You can stop after the local gate, run a single phase, or audit an existing run without any model call:
 
 ```bash
 python3 scripts/run_article.py --mode earnings --phase prepare
 python3 scripts/run_article.py --mode earnings --phase draft --run-id <run_id>
 python3 scripts/run_article.py --mode earnings --phase finalize --run-id <run_id>
+python3 scripts/run_article.py --mode earnings --phase audit --run-id <run_id>
+```
+
+For a historical run that genuinely has no marker or checkpoint files, request the code-only waiver explicitly:
+
+```bash
+python3 scripts/run_article.py --mode earnings --phase audit --run-id <run_id> --allow-unprovenanced-audit
+```
+
+Unattended runs need explicit scope approval and, optionally, analysis modes and depth:
+
+```bash
+python3 scripts/run_article.py --mode industry --run-id <run_id> \
+  --intake-original-request "verbatim user request" \
+  --intake-analysis-mode market_reaction \
+  --intake-analysis-mode company_fundamental \
+  --intake-depth standard \
+  --intake-approve-scope
 ```
 
 `prepare` runs intake, source ingest, strict preflight, and manifest creation without drafting. Earnings preflight requires usable current and previous release/deck materials before Codex is called. The runner writes `outputs/{run_id}/preflight_result.json`, `outputs/{run_id}/run_manifest.json`, and later `outputs/{run_id}/claim_ledger.json`. Earnings runs also require `outputs/{run_id}/earnings_delta_matrix.json` and `.md` before final success.
+
+If an existing intent contract is malformed or belongs to another run, execution fails before ingest. Use `--intake-reset-intent-contract` only to back up those intent artifacts and create a pending contract for the current run; scope approval remains separate.
 
 Earnings runs default to live Codex web search. Industry runs default to cached Codex web search.
 Override when needed:
@@ -71,6 +124,42 @@ python3 scripts/run_summary.py --run-id ai_power_grid_20260428T2027KST
 
 Summary artifacts are written under `outputs/{run_id}/summary/` and are not article outputs, evidence sources, or replacements for `source_ledger.csv` or `image_ledger.csv`. The A4 image request uses Codex internal image generation tools only; the runner does not call OpenAI API endpoints, File Search, vector stores, or external image APIs.
 
+## A4 PDF Publishing
+
+Reader-friendly A4 PDF publishing is opt-in and runs only after article outputs pass finalize validation:
+
+```bash
+python3 scripts/run_article.py --mode industry --publish-pdf
+python3 scripts/run_publish.py --run-id ai_power_grid_20260428T2027KST
+```
+
+Publish artifacts are written under `outputs/{run_id}/publish/`:
+
+```text
+outputs/{run_id}/publish/article.pdf
+outputs/{run_id}/publish/publish_figure_map.csv
+outputs/{run_id}/publish/publish_manifest.json
+outputs/{run_id}/publish/publish_result.json
+```
+
+The renderer is a deterministic local renderer. It performs no Codex calls, no web search, and no external API requests, so the same inputs always produce the same PDF. Images stay at their article reference positions and are numbered as `그림 N`; captions come from `image_ledger.csv` so the PDF introduces no facts absent from the article and ledgers. Inline citation links stay clickable and are also printed as numbered link footnotes for paper readers.
+
+Publishing requires the optional renderer dependency and a Hangul TrueType font:
+
+```bash
+python3 -m pip install -e ".[publish]"
+```
+
+A bold Hangul face is optional; when none is available the renderer maps the bold slot onto the regular face and separates heading levels by size and colour. Set an explicit font when auto-discovery fails:
+
+```toml
+[profiles.default.publish]
+enabled = true
+font_regular = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
+```
+
+PDF publishing never modifies `article.md`, the ledgers, or `article_result.json`. Publish status is reported only in `publish_result.json`.
+
 ## Conversational Intake
 
 For short chat-style requests, use `$article-intake` first. The intake skill asks the missing questions, produces an approval plan, and after approval creates run-local inputs under `work/runs/{run_id}/intake/`.
@@ -97,6 +186,14 @@ python3 scripts/run_article.py --prepare-only --mode industry --run-id ai_power_
 
 `--prepare-only` is the compatibility alias for `--phase prepare` plus App-native fallback prompt generation. It creates directories, source-ingest artifacts, preflight output, run manifest, and `work/runs/{run_id}/prepare_manifest.json` without running `codex exec`. The current Codex App session can then use that manifest and the repo-local prompt contracts as the App-native fallback. Nested CLI execution still requires `codex` to be installed, authenticated, available on `PATH`, and trusted for this project.
 
+After the App-native session writes and validates the final artifacts, run its explicit code-only audit waiver:
+
+```bash
+python3 scripts/run_article.py --mode industry --phase audit --run-id ai_power_grid_20260428 --allow-unprovenanced-audit
+```
+
+This does not reconstruct model-phase provenance and never promotes the run to `outputs/latest/`. If a marker or any checkpoint file exists, the waiver is rejected instead of hiding partial or corrupt provenance.
+
 Before Codex runs, the runner preprocesses `inputs/sources.csv` into repo-local source artifacts under `work/runs/{run_id}/`. Local files are copied into `research/sources/`; allowed HTTPS sources are downloaded only when shell network access is explicitly enabled. Downloaded or registered sources are hashed, PDF text/index files are written under `research/pdf_text/` and `research/pdf_index.jsonl`, and rendered PDF page images are inventoried under `images/rendered/` when Poppler tools such as `pdftotext` and `pdftoppm` are available.
 
 Final image ledgers must include caption audit fields: `actual_slide_title`, `detected_key_datapoints`, `article_anchor_before`, `article_anchor_after`, `keep_or_drop`, and `drop_reason`. Final claim ledgers must connect core claims to source IDs and datapoints; unsupported or human-review claims block finalization.
@@ -108,7 +205,7 @@ Automatic downloads are limited to official or explicitly allowed domains. Add p
 allowed_domains = ["investor.example.com"]
 ```
 
-The default remains repo-local only. OpenAI API key is not required for the runner, and OpenAI File Search/vector-store upload is not used by the runner. Codex usage is limited to the CLI subscription-quota surface: `codex exec`, configured `web_search`, and rendered local images passed with `--image`.
+The default remains repo-local only. OpenAI API key is not required for the runner, and OpenAI File Search/vector-store upload is not used by the runner. Codex usage is limited to the CLI subscription-quota surface: `codex exec`, configured `web_search`, and rendered local images passed with `--image` only to `image_slide_auditor`.
 
 Summary image style is configured inline in TOML under `[profiles.<name>.summary]`, for example `style_name`, `style_prompt`, `negative_prompt`, `paper_size`, `orientation`, and `max_visual_claims`. Separate Markdown style files are not used.
 

@@ -37,10 +37,12 @@ class CliExecutionTests(CliHarness):
             self.assertNotIn("--full-auto", command)
             self.assertNotIn("sandbox_workspace_write.network_access=true", command)
             prompt = command[-1]
-            self.assertIn("Run id: `test_run`.", prompt)
+            self.assertIn("- run_id: test_run", prompt)
             self.assertIn("outputs/test_run/article.md", prompt)
-            self.assertIn("Do not write `outputs/test_run/article_result.json` directly", prompt)
-            self.assertIn("non-publishable failure note", prompt)
+            # The finalize role card now carries the freeze order and result-output rules,
+            # and concrete paths arrive through the compiled RUN CONTRACT block.
+            self.assertIn("- article_result: outputs/test_run/article_result.json", prompt)
+            self.assertIn("Freeze the article", prompt)
 
     def test_allow_shell_network_is_explicit_opt_in(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -84,11 +86,12 @@ class CliExecutionTests(CliHarness):
             self.assertEqual(status, 7)
             run_source_ingest.assert_not_called()
             prompt = run_command.call_args.args[0][-1]
-            self.assertIn("Source preprocessing is `disabled`.", prompt)
-            self.assertIn("Use `inputs/sources.csv` directly as the source inventory", prompt)
+            # Source preprocessing state now travels in the compiled RUN CONTRACT block.
+            self.assertIn("- source_ingest_enabled: false", prompt)
+            self.assertIn("- sources_path: inputs/sources.csv", prompt)
             self.assert_no_ingest_artifacts_in_prompt(prompt)
 
-    def test_rendered_ingest_images_are_passed_to_codex_image_input(self) -> None:
+    def test_non_auditor_role_omits_rendered_image_inputs(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
             self.write_complete_earnings_sources(root)
@@ -116,9 +119,7 @@ class CliExecutionTests(CliHarness):
 
             self.assertEqual(status, 7)
             command = run_command.call_args.args[0]
-            prompt = command[-1]
-            image_index = command.index("--image")
-            self.assertEqual(command[image_index:], ["--image", image_one, image_two, "--", prompt])
+            self.assertNotIn("--image", command)
             self.assertNotIn(f"{image_one},{image_two}", command)
 
     def test_industry_defaults_to_cached_web_search(self) -> None:
@@ -195,7 +196,11 @@ class CliExecutionTests(CliHarness):
                 "source_ledger.csv",
                 "image_ledger.csv",
             ]:
-                self.assertEqual((root / "outputs" / "latest" / name).read_text(encoding="utf-8"), name)
+                mirrored = (root / "outputs" / "latest" / name).read_text(encoding="utf-8")
+                self.assertEqual(
+                    mirrored,
+                    (root / "outputs" / "test_run" / name).read_text(encoding="utf-8"),
+                )
             self.assertFalse((root / "outputs" / "latest" / "stale_extra.txt").exists())
 
     def test_successful_run_allows_configured_custom_output_files(self) -> None:
@@ -214,9 +219,25 @@ class CliExecutionTests(CliHarness):
                     path = root / rel
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.write_text(rel, encoding="utf-8")
+                (root / custom_outputs[2]).write_text(
+                    "source_id,url,local_path,sha256,ingest_status,allowed_domain,blocked_reason\n",
+                    encoding="utf-8",
+                )
+                (root / custom_outputs[3]).write_text(
+                    "image_path,keep_or_drop,visual_question,supported_claim_ids,"
+                    "why_prose_is_insufficient\n",
+                    encoding="utf-8",
+                )
                 claim_path = root / "outputs" / "test_run" / "claim_ledger.json"
                 claim_path.parent.mkdir(parents=True, exist_ok=True)
                 claim_path.write_text("[]\n", encoding="utf-8")
+                # Finalize also owns the appendix and paragraph map.
+                self.write_finalize_side_artifacts_for(
+                    root,
+                    run_id="test_run",
+                    article_rel=custom_outputs[1],
+                    result_rel=custom_outputs[0],
+                )
                 return 0
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
@@ -240,22 +261,21 @@ class CliExecutionTests(CliHarness):
                 )
 
             self.assertEqual(status, 0, output)
-            self.assertEqual(
-                (root / "outputs" / "latest" / "article_result.json").read_text(encoding="utf-8"),
-                custom_outputs[0],
-            )
-            self.assertEqual(
-                (root / "outputs" / "latest" / "article.md").read_text(encoding="utf-8"),
-                custom_outputs[1],
-            )
-            self.assertEqual(
-                (root / "outputs" / "latest" / "source_ledger.csv").read_text(encoding="utf-8"),
-                custom_outputs[2],
-            )
-            self.assertEqual(
-                (root / "outputs" / "latest" / "image_ledger.csv").read_text(encoding="utf-8"),
-                custom_outputs[3],
-            )
+            # article_result.json is now schema-shaped JSON written by finalize, so compare
+            # each mirrored file against its configured source rather than a placeholder.
+            for mirrored_name, source_rel in zip(
+                [
+                    "article_result.json",
+                    "article.md",
+                    "source_ledger.csv",
+                    "image_ledger.csv",
+                ],
+                custom_outputs,
+            ):
+                self.assertEqual(
+                    (root / "outputs" / "latest" / mirrored_name).read_text(encoding="utf-8"),
+                    (root / source_rel).read_text(encoding="utf-8"),
+                )
 
     def test_missing_configured_output_fails_without_refreshing_latest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -282,7 +302,7 @@ class CliExecutionTests(CliHarness):
                 )
 
             self.assertEqual(status, 2)
-            self.assertIn("missing configured output: outputs/test_run/image_ledger.csv", output)
+            self.assertIn("missing expected artifact: outputs/test_run/image_ledger.csv", output)
             self.assertEqual(
                 (latest_dir / "image_ledger.csv").read_text(encoding="utf-8"),
                 "stale-image-ledger",
@@ -298,10 +318,12 @@ class CliExecutionTests(CliHarness):
             latest_dir = root / "outputs" / "latest"
             latest_dir.mkdir(parents=True)
             (latest_dir / "article.md").write_text("stale-article", encoding="utf-8")
+            self.write_valid_earnings_outputs(root, delta_payload="{not-json")
+            self.seed_provenance_checkpoints(root, mode="earnings", through="revise")
 
             def fake_run(_command: list[str], *, cwd: Path) -> int:
                 self.assertEqual(cwd, root.resolve())
-                self.write_valid_earnings_outputs(root, delta_payload="{not-json")
+                self.write_valid_earnings_outputs(root, write_delta=False)
                 return 0
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
@@ -317,7 +339,6 @@ class CliExecutionTests(CliHarness):
                 )
 
             self.assertEqual(status, 2)
-            self.assertIn("Post-run validation failed", output)
             self.assertIn("invalid earnings delta JSON", output)
             self.assertEqual(
                 (latest_dir / "article.md").read_text(encoding="utf-8"),
@@ -342,10 +363,12 @@ mode = "earnings"
 external_root = "{external_root.as_posix()}"
 """.lstrip(),
             )
+            self.write_valid_earnings_outputs(root, delta_payload={})
+            self.seed_provenance_checkpoints(root, mode="earnings", through="revise")
 
             def fake_run(_command: list[str], *, cwd: Path) -> int:
                 self.assertEqual(cwd, root.resolve())
-                self.write_valid_earnings_outputs(root, delta_payload={})
+                self.write_valid_earnings_outputs(root, write_delta=False)
                 return 0
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
@@ -372,10 +395,12 @@ external_root = "{external_root.as_posix()}"
             self.copy_schema(root, "schemas/claim_ledger.schema.json")
             self.copy_schema(root, "schemas/earnings_delta.schema.json")
             delta_payload = self.minimal_earnings_delta_payload()
+            self.write_valid_earnings_outputs(root, delta_payload=delta_payload)
+            self.seed_provenance_checkpoints(root, mode="earnings", through="revise")
 
             def fake_run(_command: list[str], *, cwd: Path) -> int:
                 self.assertEqual(cwd, root.resolve())
-                self.write_valid_earnings_outputs(root, delta_payload=delta_payload)
+                self.write_valid_earnings_outputs(root, write_delta=False)
                 return 0
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
@@ -422,7 +447,10 @@ external_root = "{external_root.as_posix()}"
                 )
 
             self.assertEqual(status, 2)
-            self.assertIn("protected untracked file changed: scratch.md", output)
+            self.assertIn(
+                "role write outside exact output allowlist (changed): scratch.md",
+                output,
+            )
             self.assertFalse((root / "outputs" / "latest").exists())
 
     def test_existing_untracked_allowed_artifacts_can_be_updated(self) -> None:
@@ -434,13 +462,19 @@ external_root = "{external_root.as_posix()}"
             run_scoped_draft = (
                 root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
             )
-            run_scoped_draft.parent.mkdir(parents=True)
-            run_scoped_draft.write_text("before-draft", encoding="utf-8")
+            run_scoped_draft.parent.mkdir(parents=True, exist_ok=True)
+            # This test is about snapshot protection, not draft content, but the draft
+            # must still satisfy the traceability contract the finalize gate re-checks.
+            run_scoped_draft.write_text(
+                "# before-draft\n\n본문입니다.\n<!-- claims: C001 | evidence: E001 -->\n",
+                encoding="utf-8",
+            )
+            # This draft stands in for what the revise phase produced, so the recorded
+            # completion state has to describe it before finalize resumes.
+            self.seed_provenance_checkpoints(root)
 
             def fake_run(_command: list[str], *, cwd: Path) -> int:
                 self.assertEqual(cwd, root.resolve())
-                configured_output.write_text("after-configured-output", encoding="utf-8")
-                run_scoped_draft.write_text("after-draft", encoding="utf-8")
                 for rel in [
                     "outputs/test_run/article.md",
                     "outputs/test_run/source_ledger.csv",
@@ -449,7 +483,27 @@ external_root = "{external_root.as_posix()}"
                 ]:
                     path = root / rel
                     path.parent.mkdir(parents=True, exist_ok=True)
-                    path.write_text("[]\n" if path.suffix == ".json" else path.name, encoding="utf-8")
+                    if path.name == "source_ledger.csv":
+                        content = (
+                            "source_id,url,local_path,sha256,ingest_status,allowed_domain,"
+                            "blocked_reason\n"
+                        )
+                    elif path.name == "image_ledger.csv":
+                        content = (
+                            "image_path,keep_or_drop,visual_question,supported_claim_ids,"
+                            "why_prose_is_insufficient\n"
+                        )
+                    else:
+                        content = "[]\n" if path.suffix == ".json" else path.name
+                    path.write_text(content, encoding="utf-8")
+                # The configured result file must be schema-shaped because the finalize
+                # audit re-derives the article hash from it.
+                self.write_finalize_side_artifacts_for(
+                    root,
+                    run_id="test_run",
+                    article_rel="outputs/test_run/article.md",
+                    result_rel="outputs/custom/article_result.json",
+                )
                 return 0
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
@@ -467,11 +521,17 @@ external_root = "{external_root.as_posix()}"
                 )
 
             self.assertEqual(status, 0, output)
-            self.assertEqual(configured_output.read_text(encoding="utf-8"), "after-configured-output")
-            self.assertEqual(run_scoped_draft.read_text(encoding="utf-8"), "after-draft")
+            # The point of this test is that an existing untracked allowed artifact may be
+            # rewritten by the run without tripping snapshot protection.
+            self.assertNotEqual(
+                configured_output.read_text(encoding="utf-8"), "before-configured-output"
+            )
+            # The finalizer reads the draft and must not rewrite it, so the revise-phase
+            # draft stays exactly as the earlier phase left it.
+            self.assertIn("before-draft", run_scoped_draft.read_text(encoding="utf-8"))
             self.assertEqual(
                 (root / "outputs" / "latest" / "article_result.json").read_text(encoding="utf-8"),
-                "after-configured-output",
+                configured_output.read_text(encoding="utf-8"),
             )
 
     def test_post_run_validator_rejects_changed_or_deleted_existing_ignored_artifacts(self) -> None:
@@ -513,7 +573,10 @@ external_root = "{external_root.as_posix()}"
                         )
 
                     self.assertEqual(status, 2, output)
-                    self.assertIn(f"protected work/output file changed: {rel}", output)
+                    self.assertIn(
+                        f"role write outside exact output allowlist ({action}): {rel}",
+                        output,
+                    )
                     self.assertFalse((root / "outputs" / "latest").exists())
 
     def test_post_run_validator_rejects_legacy_work_artifact_paths(self) -> None:

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine paragraph map",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "article_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "paragraphs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "paragraph_id": {"type": "string", "minLength": 1},
+          "heading": {"type": "string"},
+          "line_start": {"type": "integer", "minimum": 1},
+          "line_end": {"type": "integer", "minimum": 1},
+          "claim_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "required": ["paragraph_id", "heading", "line_start", "line_end", "claim_ids"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "article_sha256", "paragraphs"]
+}

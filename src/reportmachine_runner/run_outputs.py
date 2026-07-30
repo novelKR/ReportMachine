@@ -4,6 +4,7 @@ import csv
 import json
 import shutil
 from datetime import datetime, timezone
+from hashlib import sha256
 from pathlib import Path
 from typing import Sequence
 
@@ -21,6 +22,9 @@ IMAGE_LEDGER_HEADER = [
     "image_hash",
     "inspected_status",
     "caption_basis",
+    "visual_question",
+    "supported_claim_ids",
+    "why_prose_is_insufficient",
     "actual_slide_title",
     "detected_key_datapoints",
     "caption",
@@ -189,7 +193,11 @@ def write_preflight_failure_outputs(
         *[f"- {item}" for item in warnings],
         "",
     ]
-    resolve_under_root(root, article_output).write_text("\n".join(article), encoding="utf-8")
+    article_path = resolve_under_root(root, article_output)
+    article_path.write_text("\n".join(article), encoding="utf-8")
+    # `article_sha256` is unconditionally required, so hash the failure note itself
+    # instead of emitting a placeholder that no artifact matches.
+    article_digest = sha256(article_path.read_bytes()).hexdigest()
     copy_or_write_source_ledger(
         root=root,
         source_candidate_ledger=source_candidate_ledger,
@@ -209,6 +217,7 @@ def write_preflight_failure_outputs(
         output,
         {
             "article_type": mode,
+            "article_sha256": article_digest,
             "title": "Preflight failed",
             "subtitle": "Required source materials were missing or unusable.",
             "one_sentence_insight": "",
@@ -250,19 +259,23 @@ def write_run_summary_log(
     article_result: str,
     events_log: str,
     stderr_log: str,
+    provenance_status: str | None = None,
 ) -> None:
+    payload = {
+        "run_id": run_id,
+        "phase": phase,
+        "status": status,
+        "preflight_status": preflight_status,
+        "article_result": article_result,
+        "events_log": events_log,
+        "stderr_log": stderr_log,
+    }
+    if provenance_status is not None:
+        payload["provenance_status"] = provenance_status
     write_json_artifact(
         root,
         f"logs/{run_id}/run_summary.json",
-        {
-            "run_id": run_id,
-            "phase": phase,
-            "status": status,
-            "preflight_status": preflight_status,
-            "article_result": article_result,
-            "events_log": events_log,
-            "stderr_log": stderr_log,
-        },
+        payload,
     )
 
 

@@ -120,7 +120,6 @@ def _audit_image_captions(
             [
                 row.get("actual_slide_title", ""),
                 row.get("detected_key_datapoints", ""),
-                row.get("caption_basis", ""),
                 evidence_text,
             ]
         )

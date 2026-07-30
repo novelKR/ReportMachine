@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine image audit report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "issue_id": {"type": "string", "pattern": "^IMG-[0-9]+$"},
+          "priority": {"type": "string", "enum": ["blocking", "high", "normal"]},
+          "issue": {"type": "string", "minLength": 1},
+          "required_fix": {"type": "string", "minLength": 1}
+        },
+        "required": ["issue_id", "priority", "issue", "required_fix"]
+      }
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "image_path": {"type": "string", "minLength": 1},
+          "source_doc": {"type": "string"},
+          "source_id": {"type": "string"},
+          "page_or_slide_number": {"type": ["integer", "string", "null"]},
+          "source_hash": {"type": "string"},
+          "visual_question": {"type": "string"},
+          "supported_claim_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "why_prose_is_insufficient": {"type": "string"},
+          "actual_slide_title": {"type": "string"},
+          "detected_key_datapoints": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "caption_candidate": {"type": "string"},
+          "article_anchor_before": {"type": "string"},
+          "article_anchor_after": {"type": "string"},
+          "keep_or_drop": {"type": "string", "enum": ["keep", "drop"]},
+          "drop_reason": {"type": "string"}
+        },
+        "required": [
+          "image_path",
+          "source_doc",
+          "source_id",
+          "page_or_slide_number",
+          "source_hash",
+          "visual_question",
+          "supported_claim_ids",
+          "why_prose_is_insufficient",
+          "actual_slide_title",
+          "detected_key_datapoints",
+          "caption_candidate",
+          "article_anchor_before",
+          "article_anchor_after",
+          "keep_or_drop",
+          "drop_reason"
+        ]
+      }
+    }
+  },
+  "required": ["version", "run_id", "issues", "images"]
+}

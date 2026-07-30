@@ -5,19 +5,36 @@ import json
 from pathlib import Path
 
 
+AGENT_ROLE_CARDS = {
+    ".codex/agents/scope_guardian.toml": "prompts/roles/scope_guardian.md",
+    ".codex/agents/research_planner.toml": "prompts/roles/research_planner.md",
+    ".codex/agents/primary_source_scout.toml": "prompts/roles/primary_source_scout.md",
+    ".codex/agents/counterevidence_scout.toml": "prompts/roles/counterevidence_scout.md",
+    ".codex/agents/evidence_verifier.toml": "prompts/roles/evidence_verifier.md",
+    ".codex/agents/evidence_integrator.toml": "prompts/roles/evidence_integrator.md",
+    ".codex/agents/earnings_delta_analyst.toml": "prompts/roles/earnings_delta_analyst.md",
+    ".codex/agents/thesis_adjudicator.toml": "prompts/roles/thesis_adjudicator.md",
+    ".codex/agents/narrative_architect.toml": "prompts/roles/narrative_architect.md",
+    ".codex/agents/article_writer.toml": "prompts/roles/article_writer.md",
+    ".codex/agents/citation_logic_checker.toml": "prompts/roles/citation_logic_checker.md",
+    ".codex/agents/editorial_red_team.toml": "prompts/roles/editorial_red_team.md",
+    ".codex/agents/qa_reviewer.toml": "prompts/roles/qa_reviewer.md",
+    ".codex/agents/compression_editor.toml": "prompts/roles/compression_editor.md",
+    ".codex/agents/image_slide_auditor.toml": "prompts/roles/image_slide_auditor.md",
+    ".codex/agents/finalizer.toml": "prompts/roles/finalizer.md",
+    # Backward-compatible App-native aliases. The runner uses canonical names above.
+    ".codex/agents/source_researcher.toml": "prompts/roles/primary_source_scout.md",
+    ".codex/agents/citation_checker.toml": "prompts/roles/citation_logic_checker.md",
+}
+
+
 REQUIRED_FILES = [
     "AGENTS.md",
     "README.md",
     ".article-root",
     ".codex/config.toml",
     "reportmachine.example.toml",
-    ".codex/agents/source_researcher.toml",
-    ".codex/agents/earnings_delta_analyst.toml",
-    ".codex/agents/image_slide_auditor.toml",
-    ".codex/agents/narrative_architect.toml",
-    ".codex/agents/citation_checker.toml",
-    ".codex/agents/qa_reviewer.toml",
-    ".codex/agents/article_writer.toml",
+    *AGENT_ROLE_CARDS,
     ".agents/skills/industry-article/SKILL.md",
     ".agents/skills/earnings-article/SKILL.md",
     ".agents/skills/article-qa/SKILL.md",
@@ -30,15 +47,53 @@ REQUIRED_FILES = [
     "prompts/EARNINGS_PROMPT.md",
     "prompts/SOURCE_POLICY.md",
     "prompts/AUTHOR_PROFILE.md",
+    "prompts/core/CORE_POLICY.md",
+    "prompts/core/MODE_CONTRACT.md",
+    "prompts/roles/scope_guardian.md",
+    "prompts/roles/research_planner.md",
+    "prompts/roles/primary_source_scout.md",
+    "prompts/roles/counterevidence_scout.md",
+    "prompts/roles/evidence_verifier.md",
+    "prompts/roles/evidence_integrator.md",
+    "prompts/roles/thesis_adjudicator.md",
+    "prompts/roles/narrative_architect.md",
+    "prompts/roles/article_writer.md",
+    "prompts/roles/citation_logic_checker.md",
+    "prompts/roles/editorial_red_team.md",
+    "prompts/roles/qa_reviewer.md",
+    "prompts/roles/compression_editor.md",
+    "prompts/roles/image_slide_auditor.md",
+    "prompts/roles/earnings_delta_analyst.md",
+    "prompts/roles/finalizer.md",
     "schemas/article_result.schema.json",
     "schemas/preflight_result.schema.json",
     "schemas/claim_ledger.schema.json",
     "schemas/summary_result.schema.json",
     "schemas/earnings_delta.schema.json",
+    "schemas/publish_result.schema.json",
+    "schemas/intent_contract.schema.json",
+    "schemas/research_question_tree.schema.json",
+    "schemas/source_candidate.schema.json",
+    "schemas/evidence_card.schema.json",
+    "schemas/contradiction_ledger.schema.json",
+    "schemas/evidence_gap_map.schema.json",
+    "schemas/thesis_decision.schema.json",
+    "schemas/narrative_plan.schema.json",
+    "schemas/citation_logic_report.schema.json",
+    "schemas/red_team_report.schema.json",
+    "schemas/qa_report.schema.json",
+    "schemas/compression_report.schema.json",
+    "schemas/image_audit_report.schema.json",
+    "schemas/revision_notes.schema.json",
+    "schemas/paragraph_map.schema.json",
+    "schemas/final_sync_report.schema.json",
+    "schemas/agent_attempt.schema.json",
+    "schemas/phase_provenance.schema.json",
     "inputs/topic.md",
     "inputs/sources.csv",
     "scripts/run_article.py",
     "scripts/run_summary.py",
+    "scripts/run_publish.py",
     "scripts/package_source.py",
     "scripts/layout_contract.py",
     "src/reportmachine_runner/artifacts.py",
@@ -55,9 +110,15 @@ REQUIRED_FILES = [
     "src/reportmachine_runner/run_outputs.py",
     "src/reportmachine_runner/source_fetch.py",
     "src/reportmachine_runner/source_ingest.py",
+    "src/reportmachine_runner/source_text.py",
     "src/reportmachine_runner/source_ingest_paths.py",
     "src/reportmachine_runner/source_ledgers.py",
     "src/reportmachine_runner/pdf_processing.py",
+    "src/reportmachine_runner/publish.py",
+    "src/reportmachine_runner/publish_contracts.py",
+    "src/reportmachine_runner/publish_markdown.py",
+    "src/reportmachine_runner/publish_pdf.py",
+    "src/reportmachine_runner/publish_workflow.py",
     "src/reportmachine_runner/summary.py",
     "src/reportmachine_runner/summary_contracts.py",
     "src/reportmachine_runner/summary_prompt.py",
@@ -99,6 +160,7 @@ RELEASE_BLOCKED_PATTERNS = [
     "*.spec",
     ".DS_Store",
     "__pycache__",
+    "*.egg-info",
 ]
 
 RELEASE_ARTIFACT_DIRS = [
@@ -131,6 +193,11 @@ API_UPLOAD_GUARDED_FILES = [
     "src/reportmachine_runner/summary_prompt.py",
     "src/reportmachine_runner/summary_validation.py",
     "src/reportmachine_runner/summary_workflow.py",
+    "src/reportmachine_runner/publish.py",
+    "src/reportmachine_runner/publish_contracts.py",
+    "src/reportmachine_runner/publish_markdown.py",
+    "src/reportmachine_runner/publish_pdf.py",
+    "src/reportmachine_runner/publish_workflow.py",
 ]
 
 FORBIDDEN_PAID_API_SNIPPETS = [
@@ -283,6 +350,8 @@ def verify_layout_contract(root: Path, *, release: bool = False) -> list[str]:
             "$article-intake",
             "--prepare-only",
             "--summary-output",
+            "--publish-pdf",
+            "python3 scripts/run_publish.py",
             "App-native fallback",
             "External artifact roots are runner-only",
             "OpenAI API key is not required",
@@ -309,6 +378,8 @@ def verify_layout_contract(root: Path, *, release: bool = False) -> list[str]:
             "preflight_result.json",
             "claim_ledger.json",
             "run_manifest.json",
+            "--publish-pdf",
+            "outputs/{run_id}/publish/article.pdf",
         ],
     )
 
@@ -327,6 +398,7 @@ def verify_layout_contract(root: Path, *, release: bool = False) -> list[str]:
             "schemas/preflight_result.schema.json",
             "schemas/claim_ledger.schema.json",
             "schemas/summary_result.schema.json",
+            "schemas/publish_result.schema.json",
         ],
     )
 
@@ -353,6 +425,29 @@ def verify_layout_contract(root: Path, *, release: bool = False) -> list[str]:
             "summary_claim_map.csv",
         ],
     )
+
+    publish_pdf_text = (root / "src/reportmachine_runner/publish_pdf.py").read_text(encoding="utf-8")
+    publish_contract_text = (
+        root / "src/reportmachine_runner/publish_contracts.py"
+    ).read_text(encoding="utf-8")
+    require_snippets(
+        errors,
+        "publish output modules",
+        publish_pdf_text + "\n" + publish_contract_text,
+        [
+            "local_deterministic_renderer",
+            "article.pdf",
+            "publish_figure_map.csv",
+        ],
+    )
+    # CID fonts render Hangul as a blank page in poppler based viewers, so the
+    # renderer must only ever embed TrueType faces.
+    if "UnicodeCIDFont(" in publish_pdf_text:
+        errors.append(
+            "publish renderer must not register CID fonts; embed a TrueType Hangul face instead"
+        )
+    if "TTFont(" not in publish_pdf_text:
+        errors.append("publish renderer must embed a TrueType font for Hangul output")
 
     prompt_text = (root / "src/reportmachine_runner/prompt.py").read_text(encoding="utf-8")
     require_snippets(
@@ -427,14 +522,25 @@ def verify_layout_contract(root: Path, *, release: bool = False) -> list[str]:
         ],
     )
 
-    earnings_delta_text = (root / ".codex/agents/earnings_delta_analyst.toml").read_text(encoding="utf-8")
+    for agent_path, role_card in AGENT_ROLE_CARDS.items():
+        agent_text = (root / agent_path).read_text(encoding="utf-8")
+        require_snippets(
+            errors,
+            agent_path,
+            agent_text,
+            ["src/reportmachine_runner/roles.py", role_card],
+        )
+
+    earnings_delta_text = (root / "prompts/roles/earnings_delta_analyst.md").read_text(
+        encoding="utf-8"
+    )
     require_snippets(
         errors,
-        ".codex/agents/earnings_delta_analyst.toml",
+        "prompts/roles/earnings_delta_analyst.md",
         earnings_delta_text,
         [
             "Explore at least two disappeared prior-quarter highlights",
-            "If fewer than two disappeared highlights are found",
+            "If fewer than two exist",
         ],
     )
 

@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine intent contract",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "run_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "article_type": {
+      "type": "string",
+      "enum": ["industry", "earnings", "preview"]
+    },
+    "original_request": {
+      "type": ["string", "null"],
+      "description": "Verbatim user request. Null only for legacy runs that did not capture it."
+    },
+    "primary_question": {
+      "type": "string"
+    },
+    "must_include": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "must_not_include": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "proposed_exclusions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item": {"type": "string", "minLength": 1},
+          "reason_class": {
+            "type": "string",
+            "enum": ["policy_prohibited", "analytically_unnecessary", "out_of_scope_length", "unverifiable"]
+          },
+          "reason": {"type": "string"}
+        },
+        "required": ["item", "reason_class"]
+      }
+    },
+    "scope_delta": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "change": {
+            "type": "string",
+            "enum": ["added", "removed", "narrowed", "reframed"]
+          },
+          "detail": {"type": "string", "minLength": 1},
+          "material": {"type": "boolean"}
+        },
+        "required": ["change", "detail", "material"]
+      }
+    },
+    "scope_status": {
+      "type": "string",
+      "enum": ["aligned", "approval_required", "conflicting"]
+    },
+    "analysis_modes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "industry_structure",
+          "company_fundamental",
+          "market_reaction",
+          "event_analysis",
+          "earnings_quality",
+          "technology_validation"
+        ]
+      }
+    },
+    "depth": {
+      "type": "string",
+      "enum": ["brief", "standard", "deep"]
+    },
+    "approval_status": {
+      "type": "string",
+      "enum": ["pending", "approved", "rejected"]
+    },
+    "approved_at": {
+      "type": ["string", "null"]
+    },
+    "approved_scope_delta_sha256": {
+      "type": ["string", "null"],
+      "description": "SHA-256 of the material scope_delta entries this approval covers. A mismatch blocks drafting until the user approves the current scope again."
+    },
+    "base_date": {
+      "type": "string",
+      "minLength": 1
+    },
+    "required_user_decisions": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  },
+  "required": [
+    "version",
+    "run_id",
+    "article_type",
+    "original_request",
+    "primary_question",
+    "must_include",
+    "must_not_include",
+    "proposed_exclusions",
+    "scope_delta",
+    "scope_status",
+    "analysis_modes",
+    "depth",
+    "approval_status",
+    "approved_scope_delta_sha256",
+    "base_date"
+  ]
+}

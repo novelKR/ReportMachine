@@ -138,6 +138,18 @@ class VerifyLayoutReleaseTests(unittest.TestCase):
                 errors,
             )
 
+    def test_release_blocks_editable_install_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.write_file(root, "src/reportmachine_runner.egg-info/PKG-INFO")
+
+            errors = self.collect_release_errors(root)
+
+            self.assertIn(
+                "release-blocked generated artifact exists: src/reportmachine_runner.egg-info",
+                errors,
+            )
+
     def test_release_blocks_latest_output_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -89,6 +89,7 @@ class CliPrepareTests(CliHarness):
                 manifest_prompt,
             )
             self.assertIn("App-native fallback flow does not run Codex CLI `-o`", manifest_prompt)
+            self.assertIn("--allow-unprovenanced-audit", manifest_prompt)
             self.assertNotIn(
                 "Do not write `outputs/test_run/article_result.json` directly",
                 manifest_prompt,
@@ -99,6 +100,7 @@ class CliPrepareTests(CliHarness):
                 command_prompt,
             )
             self.assertIn("Codex CLI `-o` saves the final assistant message", command_prompt)
+            self.assertNotIn("--allow-unprovenanced-audit", command_prompt)
             self.assertIn("prepare-only", output)
             self.assertFalse((root / "outputs" / "latest").exists())
 

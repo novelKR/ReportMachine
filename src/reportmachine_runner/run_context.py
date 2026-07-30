@@ -9,6 +9,7 @@ from .artifacts import ArtifactSyncConfig
 from .config import RunnerProfile, load_profile_config, resolve_config_path
 from .intake import ArticleBrief, intake_sources_path, intake_topic_path
 from .paths import find_project_root, resolve_external_root, resolve_under_root, validate_run_id
+from .phase_contracts import RunArtifacts, build_run_artifacts
 from .source_ingest import (
     DEFAULT_MAX_DOWNLOAD_BYTES,
     DEFAULT_MAX_IMAGE_INPUTS,
@@ -50,8 +51,6 @@ class RunContext:
     stderr_log: str
     work_run_dir: str
     draft_output: str
-    image_notes_dir: str
-    image_ledger_candidate: str
     prepare_manifest: str
     web_search: str
     allow_shell_network: bool
@@ -63,7 +62,20 @@ class RunContext:
     max_image_inputs: int
     artifact_sync: ArtifactSyncConfig
     summary_output_enabled: bool
+    publish_pdf_enabled: bool
     source_ingest_paths: SourceIngestPaths
+    run_artifacts: RunArtifacts
+    original_request: str | None
+    approve_scope: bool
+    depth: str
+    analysis_modes: tuple[str, ...]
+    waived_blocked_sources: tuple[str, ...]
+    max_extra_research_rounds: int
+    reset_intent_contract: bool
+    allow_unprovenanced_audit: bool
+
+
+DEFAULT_MAX_EXTRA_RESEARCH_ROUNDS = 1
 
 
 def default_run_id(prefix: str | None = None) -> str:
@@ -160,6 +172,26 @@ def _has_intake_args(args: argparse.Namespace) -> bool:
     )
 
 
+def read_original_request(parser: argparse.ArgumentParser, root: Path, args: argparse.Namespace) -> str | None:
+    """Resolve the verbatim user request from either the inline flag or a file."""
+
+    inline = getattr(args, "intake_original_request", None)
+    request_file = getattr(args, "intake_original_request_file", None)
+    if inline and request_file:
+        parser.error("--intake-original-request cannot be combined with --intake-original-request-file")
+    if inline:
+        return inline
+    if not request_file:
+        return None
+    try:
+        path = resolve_under_root(root, request_file)
+    except ValueError as exc:
+        parser.error(f"--intake-original-request-file: {exc}")
+    if not path.is_file():
+        parser.error(f"--intake-original-request-file does not exist: {request_file}")
+    return path.read_text(encoding="utf-8")
+
+
 def build_intake_brief(parser: argparse.ArgumentParser, args: argparse.Namespace, mode: str) -> ArticleBrief | None:
     if not _has_intake_args(args):
         return None
@@ -187,6 +219,11 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
     if mode not in WEB_SEARCH_DEFAULTS:
         parser.error("--mode must be one of: industry, earnings, preview")
     phase = "prepare" if args.prepare_only else args.phase
+    allow_unprovenanced_audit = bool(
+        getattr(args, "allow_unprovenanced_audit", False)
+    )
+    if allow_unprovenanced_audit and phase != "audit":
+        parser.error("--allow-unprovenanced-audit requires --phase audit")
     intake_brief = build_intake_brief(parser, args, mode)
 
     run_id_prefix = profile.run_id_prefix
@@ -203,8 +240,6 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
 
     work_run_dir = f"work/runs/{run_id}"
     draft_output = f"{work_run_dir}/drafts/draft_article.md"
-    image_notes_dir = f"{work_run_dir}/images"
-    image_ledger_candidate = f"{work_run_dir}/ledgers/image_ledger.candidate.json"
 
     output = args.output or f"outputs/{run_id}/article_result.json"
     article_output = args.article_output or f"outputs/{run_id}/article.md"
@@ -254,6 +289,28 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
     )
     artifact_sync = build_artifact_sync(parser, root, profile)
     summary_output_enabled = choose_bool(args.summary_output, profile.summary.enabled)
+    publish_pdf_enabled = choose_bool(args.publish_pdf, profile.publish.enabled)
+    original_request = read_original_request(parser, root, args)
+    approve_scope = bool(getattr(args, "intake_approve_scope", False))
+    reset_intent_contract = bool(
+        getattr(args, "intake_reset_intent_contract", False)
+    )
+    depth = getattr(args, "intake_depth", None) or "standard"
+    analysis_modes = tuple(dict.fromkeys(getattr(args, "intake_analysis_mode", None) or ()))
+    waived_blocked_sources = tuple(
+        dict.fromkeys(
+            value.strip()
+            for value in (getattr(args, "waive_blocked_source", None) or ())
+            if value and value.strip()
+        )
+    )
+    max_extra_research_rounds = choose_int(
+        getattr(args, "max_extra_research_rounds", None),
+        None,
+        DEFAULT_MAX_EXTRA_RESEARCH_ROUNDS,
+        "max_extra_research_rounds",
+        parser,
+    )
 
     topic_default = intake_topic_path(run_id) if intake_brief else choose_value(args.topic, profile.topic, "inputs/topic.md")
     sources_default = intake_sources_path(run_id) if intake_brief else choose_value(args.sources, profile.sources, "inputs/sources.csv")
@@ -273,10 +330,17 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
     stderr_log = resolve_repo_arg(parser, root, stderr_log, "codex stderr log")
     work_run_dir = resolve_repo_arg(parser, root, work_run_dir, "work run directory")
     draft_output = resolve_repo_arg(parser, root, draft_output, "draft output")
-    image_notes_dir = resolve_repo_arg(parser, root, image_notes_dir, "image notes directory")
-    image_ledger_candidate = resolve_repo_arg(parser, root, image_ledger_candidate, "image ledger candidate")
     prepare_manifest = resolve_repo_arg(parser, root, f"{work_run_dir}/prepare_manifest.json", "prepare manifest")
     source_ingest_paths = build_source_ingest_paths(work_run_dir)
+    run_artifacts = build_run_artifacts(
+        work_run_dir=work_run_dir,
+        outputs_dir=f"outputs/{run_id}",
+        article=article_output,
+        source_ledger=source_ledger_output,
+        image_ledger=image_ledger_output,
+        claim_ledger=claim_ledger_output,
+        article_result=output,
+    )
 
     return RunContext(
         root=root,
@@ -301,8 +365,6 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
         stderr_log=stderr_log,
         work_run_dir=work_run_dir,
         draft_output=draft_output,
-        image_notes_dir=image_notes_dir,
-        image_ledger_candidate=image_ledger_candidate,
         prepare_manifest=prepare_manifest,
         web_search=web_search,
         allow_shell_network=allow_shell_network,
@@ -314,5 +376,15 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
         max_image_inputs=max_image_inputs,
         artifact_sync=artifact_sync,
         summary_output_enabled=summary_output_enabled,
+        publish_pdf_enabled=publish_pdf_enabled,
         source_ingest_paths=source_ingest_paths,
+        run_artifacts=run_artifacts,
+        original_request=original_request,
+        approve_scope=approve_scope,
+        depth=depth,
+        analysis_modes=analysis_modes,
+        waived_blocked_sources=waived_blocked_sources,
+        max_extra_research_rounds=max_extra_research_rounds,
+        reset_intent_contract=reset_intent_contract,
+        allow_unprovenanced_audit=allow_unprovenanced_audit,
     )

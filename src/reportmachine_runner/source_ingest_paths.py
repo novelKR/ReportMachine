@@ -33,6 +33,7 @@ class SourceIngestPaths:
     rendered_images_ledger: str
     sources_dir: str
     pdf_text_dir: str
+    extracted_text_dir: str
     rendered_images_dir: str
 
 
@@ -57,6 +58,12 @@ class SourceIngestResult:
     paths: SourceIngestPaths
     image_inputs: tuple[str, ...]
     manifest: dict[str, Any]
+    errors: tuple[str, ...] = ()
+    # Runner-internal ownership evidence for provenance receipts. These values are not
+    # serialized into the ingest manifest or receipt; they only identify ledger keys this
+    # invocation actually wrote so an unrelated pre-existing row cannot be laundered.
+    written_source_ids: tuple[str, ...] = ()
+    written_image_paths: tuple[str, ...] = ()
 
 
 def build_source_ingest_paths(work_run_dir: str) -> SourceIngestPaths:
@@ -68,5 +75,6 @@ def build_source_ingest_paths(work_run_dir: str) -> SourceIngestPaths:
         rendered_images_ledger=f"{base}/ledgers/rendered_images.csv",
         sources_dir=f"{base}/research/sources",
         pdf_text_dir=f"{base}/research/pdf_text",
+        extracted_text_dir=f"{base}/research/extracted_text",
         rendered_images_dir=f"{base}/images/rendered",
     )

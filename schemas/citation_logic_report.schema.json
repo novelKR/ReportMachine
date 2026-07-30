@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine citation and logic audit report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "overall_status": {
+      "type": "string",
+      "enum": ["pass", "pass_with_warnings", "fail"]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "issue_id": {"type": "string", "pattern": "^CIT-[0-9]+$"},
+          "issue_type": {
+            "type": "string",
+            "enum": [
+              "missing_source",
+              "wrong_locator",
+              "issuer_claim_unqualified",
+              "causal_overreach",
+              "comparison_mismatch",
+              "stale_evidence",
+              "absence_claim_unproven",
+              "contradicted",
+              "scope_leakage"
+            ]
+          },
+          "priority": {"type": "string", "enum": ["blocking", "high", "normal"]},
+          "claim_id": {"type": "string"},
+          "evidence_id": {"type": "string"},
+          "quote_from_draft": {"type": "string"},
+          "issue": {"type": "string", "minLength": 1},
+          "required_fix": {"type": "string", "minLength": 1}
+        },
+        "required": ["issue_id", "issue_type", "priority", "issue", "required_fix"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "overall_status", "issues"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"overall_status": {"const": "fail"}},
+        "required": ["overall_status"]
+      },
+      "then": {
+        "properties": {
+          "issues": {
+            "contains": {
+              "type": "object",
+              "properties": {"priority": {"const": "blocking"}},
+              "required": ["priority"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

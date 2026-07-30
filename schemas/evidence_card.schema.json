@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine evidence card (one JSONL row)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "evidence_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "claim_ids": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "claim_text": {
+      "type": "string"
+    },
+    "evidence_class": {
+      "type": "string",
+      "enum": [
+        "observed_fact",
+        "issuer_claim",
+        "regulator_statement",
+        "independent_measurement",
+        "secondary_context",
+        "analyst_inference",
+        "absence_claim",
+        "unknown"
+      ]
+    },
+    "source_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "source_role": {
+      "type": "string"
+    },
+    "exact_quote": {
+      "type": "string",
+      "description": "Verbatim source text. Required unless evidence_class is absence_claim or unknown."
+    },
+    "locator": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "page": {"type": ["integer", "null"], "minimum": 1},
+        "section": {"type": ["string", "null"]},
+        "url_fragment": {"type": ["string", "null"]}
+      }
+    },
+    "publication_date": {
+      "type": ["string", "null"]
+    },
+    "event_date": {
+      "type": ["string", "null"]
+    },
+    "valid_as_of": {
+      "type": ["string", "null"]
+    },
+    "supports": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "does_not_establish": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "independence": {
+      "type": "string",
+      "enum": ["independent", "adjacent_stakeholder", "non_independent", "unknown"]
+    },
+    "confidence": {
+      "type": "string",
+      "enum": ["high", "medium", "low"]
+    },
+    "absence_search_log": {
+      "type": "array",
+      "description": "Required when evidence_class is absence_claim: queries and scopes actually searched.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "query": {"type": "string", "minLength": 1},
+          "scope": {"type": "string"},
+          "searched_at": {"type": "string"},
+          "result": {"type": "string"}
+        },
+        "required": ["query", "scope"]
+      }
+    }
+  },
+  "required": [
+    "evidence_id",
+    "claim_ids",
+    "evidence_class",
+    "source_id",
+    "locator",
+    "supports",
+    "does_not_establish",
+    "independence",
+    "confidence"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"evidence_class": {"const": "absence_claim"}},
+        "required": ["evidence_class"]
+      },
+      "then": {
+        "properties": {
+          "absence_search_log": {"type": "array", "minItems": 1}
+        },
+        "required": ["absence_search_log"]
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "evidence_class": {
+            "enum": [
+              "observed_fact",
+              "issuer_claim",
+              "regulator_statement",
+              "independent_measurement",
+              "secondary_context"
+            ]
+          }
+        },
+        "required": ["evidence_class"]
+      },
+      "then": {
+        "properties": {"exact_quote": {"type": "string", "minLength": 1}},
+        "required": ["exact_quote"]
+      }
+    }
+  ]
+}

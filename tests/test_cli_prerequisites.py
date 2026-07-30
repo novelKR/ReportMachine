@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import importlib.abc
 import importlib.util
+from contextlib import contextmanager
 
 from tests.cli_harness import *
 
@@ -15,16 +17,47 @@ TOML_BACKEND_AVAILABLE = any(
 
 
 def missing_schema_dependency():
-    """Patch find_spec so only the schema-validation package looks absent."""
+    """Make the schema-validation package genuinely unimportable.
 
+    Patching `find_spec` alone would leave `import jsonschema` working, which hid a
+    real `ModuleNotFoundError` on paths that validate artifacts. Blocking the import
+    itself keeps these tests honest about what a missing dependency does.
+    """
+
+    package = schema_validation.SCHEMA_VALIDATION_PACKAGE
     real_find_spec = importlib.util.find_spec
 
     def fake_find_spec(name: str, *args, **kwargs):
-        if name == schema_validation.SCHEMA_VALIDATION_PACKAGE:
+        # A genuinely absent package makes the probe return None rather than raise.
+        if name == package or name.startswith(f"{package}."):
             return None
         return real_find_spec(name, *args, **kwargs)
 
-    return patch.object(importlib.util, "find_spec", side_effect=fake_find_spec)
+    class _BlockedFinder(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == package or fullname.startswith(f"{package}."):
+                raise ModuleNotFoundError(f"No module named {fullname!r}", name=fullname)
+            return None
+
+    @contextmanager
+    def _blocked():
+        finder = _BlockedFinder()
+        saved = {
+            name: module
+            for name, module in sys.modules.items()
+            if name == package or name.startswith(f"{package}.")
+        }
+        for name in saved:
+            del sys.modules[name]
+        sys.meta_path.insert(0, finder)
+        try:
+            with patch.object(importlib.util, "find_spec", side_effect=fake_find_spec):
+                yield
+        finally:
+            sys.meta_path.remove(finder)
+            sys.modules.update(saved)
+
+    return _blocked()
 
 
 class PrerequisiteHarness(CliHarness):
@@ -58,6 +91,10 @@ class SchemaDependencyProbeTests(unittest.TestCase):
 
 
 class SchemaDependencyPrerequisiteTests(PrerequisiteHarness):
+    # These tests assert that the dependency gate fires before anything is created on
+    # disk, so the harness must not pre-seed pipeline artifacts for them.
+    auto_finalize_phase = False
+
     def prepare_industry_argv(self, root: Path, *extra: str) -> list[str]:
         return [
             "--mode",
@@ -161,16 +198,53 @@ class SchemaDependencyPrerequisiteTests(PrerequisiteHarness):
                         ).is_file()
                     )
 
-    def test_missing_dependency_allows_draft_phase(self) -> None:
+    def test_missing_dependency_allows_repeated_prepare_over_existing_contract(self) -> None:
+        # The App-native fallback re-runs prepare against artifacts an earlier prepare
+        # wrote. Seeding the intent contract must not require schema validation.
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "project-root"
-            draft_output = (
-                root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
-            )
 
-            def fake_run(_command: list[str], *, cwd: Path) -> int:
-                draft_output.parent.mkdir(parents=True, exist_ok=True)
-                draft_output.write_text("# draft\n", encoding="utf-8")
+            with (
+                missing_schema_dependency(),
+                patch("reportmachine_runner.workflow.run_command", return_value=0),
+            ):
+                first_status, first_output = self.run_cli(
+                    self.prepare_industry_argv(root, "--phase", "prepare")
+                )
+                second_status, second_output = self.run_cli(
+                    self.prepare_industry_argv(
+                        root,
+                        "--phase",
+                        "prepare",
+                        "--intake-approve-scope",
+                    )
+                )
+
+            self.assertEqual(first_status, 0, first_output)
+            self.assertEqual(second_status, 0, second_output)
+            self.assertNotIn("missing required runtime dependency", second_output)
+            contract = json.loads(
+                (
+                    root / "work" / "runs" / "test_run" / "intake" / "intent_contract.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(contract["approval_status"], "approved")
+
+    def test_missing_dependency_allows_draft_with_parse_only_upstream_validation(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir(parents=True, exist_ok=True)
+            for rel in PIPELINE_SCHEMAS:
+                self.copy_schema(root, rel)
+            self.seed_pipeline_artifacts(root)
+            draft_output = root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
+
+            def fake_run(_command: list[str], *, cwd: Path, **_kwargs) -> int:
+                self.assertEqual(cwd, root.resolve())
+                draft_output.write_text(
+                    "# draft\n\n본문입니다.\n<!-- claims: C001 | evidence: E001 -->\n",
+                    encoding="utf-8",
+                )
                 return 0
 
             with (
@@ -188,6 +262,77 @@ class SchemaDependencyPrerequisiteTests(PrerequisiteHarness):
             self.assertNotIn("missing required runtime dependency", output)
             run_command.assert_called_once()
             self.assertTrue(draft_output.is_file())
+
+    def test_missing_dependency_draft_rejects_malformed_upstream_before_codex(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir(parents=True, exist_ok=True)
+            for rel in PIPELINE_SCHEMAS:
+                self.copy_schema(root, rel)
+            self.seed_pipeline_artifacts(root)
+            (root / "work" / "runs" / "test_run" / "research" / "narrative_plan.json").write_text(
+                "{ not json",
+                encoding="utf-8",
+            )
+
+            with (
+                missing_schema_dependency(),
+                patch("reportmachine_runner.workflow.run_command", return_value=0) as run_command,
+            ):
+                status, output = self.run_cli(
+                    self.prepare_industry_argv(root, "--phase", "draft")
+                )
+
+            self.assertEqual(status, 2, output)
+            self.assertIn("invalid narrative plan JSON", output)
+            run_command.assert_not_called()
+
+    def test_missing_dependency_draft_rejects_mismatched_upstream_run_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "project-root"
+            root.mkdir(parents=True, exist_ok=True)
+            for rel in PIPELINE_SCHEMAS:
+                self.copy_schema(root, rel)
+            self.seed_pipeline_artifacts(root)
+            narrative = (
+                root / "work" / "runs" / "test_run" / "research" / "narrative_plan.json"
+            )
+            payload = json.loads(narrative.read_text(encoding="utf-8"))
+            payload["run_id"] = "other_run"
+            self.write_json(narrative, payload)
+
+            with (
+                missing_schema_dependency(),
+                patch("reportmachine_runner.workflow.run_command", return_value=0) as run_command,
+            ):
+                status, output = self.run_cli(
+                    self.prepare_industry_argv(root, "--phase", "draft")
+                )
+
+            self.assertEqual(status, 2, output)
+            self.assertIn("narrative plan run_id mismatch", output)
+            run_command.assert_not_called()
+
+    def test_validation_fails_closed_when_dependency_cannot_be_imported(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            (root / "schemas").mkdir()
+            (root / "schemas" / "probe.schema.json").write_text(
+                json.dumps({"type": "object"}), encoding="utf-8"
+            )
+            (root / "probe.json").write_text(json.dumps({"a": 1}), encoding="utf-8")
+
+            with missing_schema_dependency():
+                payload, errors = schema_validation.validate_json_artifact(
+                    root=root,
+                    artifact="probe.json",
+                    schema="schemas/probe.schema.json",
+                    label="probe",
+                )
+
+            self.assertEqual(payload, {"a": 1})
+            self.assertTrue(errors)
+            self.assertIn("schema validation unavailable", errors[0])
 
     def test_missing_dependency_blocks_finalize_phases_before_codex(self) -> None:
         cases = [["--phase", "finalize"], ["--phase", "all"], []]
@@ -219,6 +364,9 @@ class SchemaDependencyPrerequisiteTests(PrerequisiteHarness):
             self.skipTest("jsonschema is not installed")
         with tempfile.TemporaryDirectory() as temp_dir:
             root = self.init_git_root(temp_dir)
+            # This class opts out of harness auto-seeding, so seed the upstream
+            # pipeline artifacts that the finalize phase gates on.
+            self.seed_pipeline_artifacts(root)
 
             def fake_run(_command: list[str], *, cwd: Path) -> int:
                 self.assertEqual(cwd, root.resolve())
@@ -241,6 +389,8 @@ class SchemaDependencyPrerequisiteTests(PrerequisiteHarness):
                         "test_run",
                         "--project-root",
                         str(root),
+                        "--phase",
+                        "finalize",
                     ]
                 )
 

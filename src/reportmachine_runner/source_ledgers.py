@@ -33,6 +33,8 @@ SOURCE_LEDGER_CANDIDATE_HEADER = [
     "ingest_status",
     "allowed_domain",
     "blocked_reason",
+    "extracted_text_path",
+    "text_status",
     "notes",
 ]
 
@@ -79,6 +81,7 @@ def _empty_manifest(config: SourceIngestConfig, paths: SourceIngestPaths, warnin
             "blocked_sources": 0,
             "pdf_pages_indexed": 0,
             "rendered_images": 0,
+            "extracted_texts": 0,
         },
         "records": [],
         "warnings": warnings,

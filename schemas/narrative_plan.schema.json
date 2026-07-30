@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine narrative plan",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "central_sentence": {"type": "string", "minLength": 1},
+    "depth": {"type": "string", "enum": ["brief", "standard", "deep"]},
+    "sections": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "section_id": {"type": "string", "minLength": 1},
+          "working_heading": {"type": "string", "minLength": 1},
+          "new_claim_or_causal_link": {"type": "string", "minLength": 1},
+          "claim_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "evidence_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "chain_to_previous": {"type": "string"},
+          "target": {
+            "type": "string",
+            "enum": ["article", "research_appendix"]
+          }
+        },
+        "required": [
+          "section_id",
+          "working_heading",
+          "new_claim_or_causal_link",
+          "claim_ids",
+          "target"
+        ]
+      }
+    },
+    "dropped_branches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "branch": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1}
+        },
+        "required": ["branch", "reason"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "central_sentence", "sections"]
+}

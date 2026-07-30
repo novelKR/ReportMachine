@@ -50,6 +50,7 @@ class ArtifactPaths:
     earnings_delta_matrix_output: str
     earnings_delta_matrix_md: str
     summary_dir: str | None = None
+    publish_dir: str | None = None
 
 
 def _now_iso() -> str:
@@ -112,6 +113,7 @@ def _write_manifest(target: Path, *, paths: ArtifactPaths, kind: str) -> None:
             "earnings_delta_matrix_json": paths.earnings_delta_matrix_output,
             "earnings_delta_matrix_md": paths.earnings_delta_matrix_md,
             "summary_dir": paths.summary_dir,
+            "publish_dir": paths.publish_dir,
         },
     }
     (target / "reportmachine_manifest.json").write_text(
@@ -167,6 +169,10 @@ def snapshot_external_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) 
         summary_source = resolve_under_root(paths.root, paths.summary_dir)
         if summary_source.is_dir():
             shutil.copytree(summary_source, outputs_dir / "summary")
+    if paths.publish_dir:
+        publish_source = resolve_under_root(paths.root, paths.publish_dir)
+        if publish_source.is_dir():
+            shutil.copytree(publish_source, outputs_dir / "publish")
     _write_manifest(temp, paths=paths, kind="snapshot")
     _atomic_replace_dir(temp, target)
 
@@ -201,6 +207,10 @@ def export_final_artifacts(sync: ArtifactSyncConfig, paths: ArtifactPaths) -> No
         summary_source = resolve_under_root(paths.root, paths.summary_dir)
         if summary_source.is_dir():
             shutil.copytree(summary_source, temp / "summary")
+    if paths.publish_dir:
+        publish_source = resolve_under_root(paths.root, paths.publish_dir)
+        if publish_source.is_dir():
+            shutil.copytree(publish_source, temp / "publish")
     _write_manifest(temp, paths=paths, kind="final")
 
     run_target = sync.external_root / "runs" / paths.run_id

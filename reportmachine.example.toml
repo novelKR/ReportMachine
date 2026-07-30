@@ -32,6 +32,23 @@ negative_prompt = """
 max_visual_claims = 6
 require_source_footer = true
 
+[profiles.default.publish]
+# Reader-friendly A4 PDF output. Deterministic local render; no Codex or API calls.
+enabled = false
+paper_size = "A4"
+orientation = "portrait"
+margin_mm = 20.0
+body_font_size = 10.5
+body_leading = 17.5
+include_cover = true
+include_toc = true
+include_link_footnotes = true
+max_image_height_ratio = 0.6
+# Set font_regular when automatic Hangul font discovery fails on this machine.
+# font_regular = "/usr/share/fonts/truetype/nanum/NanumGothic.ttf"
+# font_bold is optional; without it the regular face is reused for bold slots.
+# font_bold = "/usr/share/fonts/truetype/nanum/NanumGothicBold.ttf"
+
 # Copy this file to reportmachine.local.toml for machine-specific artifact roots.
 # External artifact roots are used only by the runner. They are not exposed to Codex prompts.
 #
@@ -75,3 +92,15 @@ negative_prompt = """
 """
 max_visual_claims = 6
 require_source_footer = true
+
+[profiles.earnings.publish]
+enabled = false
+paper_size = "A4"
+orientation = "portrait"
+margin_mm = 20.0
+body_font_size = 10.5
+body_leading = 17.5
+include_cover = true
+include_toc = true
+include_link_footnotes = true
+max_image_height_ratio = 0.6

@@ -4,6 +4,31 @@ from tests.cli_harness import *
 
 
 class CliSmokeTests(CliHarness):
+    def test_unprovenanced_audit_waiver_is_rejected_outside_audit(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "missing-root"
+
+            status, output = self.run_cli(
+                [
+                    "--mode",
+                    "industry",
+                    "--run-id",
+                    "test_run",
+                    "--project-root",
+                    str(root),
+                    "--phase",
+                    "finalize",
+                    "--allow-unprovenanced-audit",
+                    "--smoke-test",
+                ]
+            )
+
+            self.assertEqual(status, 2, output)
+            self.assertIn(
+                "--allow-unprovenanced-audit requires --phase audit",
+                output,
+            )
+
     def test_dry_run_does_not_create_default_output_dirs_under_custom_project_root(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "missing-root"
@@ -84,6 +109,12 @@ class CliSmokeTests(CliHarness):
             self.assertEqual(status, 0)
             self.assertIn("smoke-test: command and prompt built without execution", output)
             self.assertIn("Use $earnings-article.", output)
+            self.assertIn("and finalizer", output)
+            self.assertIn("schemas/agent_attempt.schema.json", output)
+            self.assertIn(
+                "python3 scripts/run_article.py --mode earnings --phase audit --run-id test_run",
+                output,
+            )
             self.assertFalse(root.exists())
 
     def test_intake_smoke_test_does_not_write_run_local_inputs(self) -> None:
@@ -410,8 +441,9 @@ enabled = false
             self.assertEqual(status, 7)
             run_source_ingest.assert_not_called()
             prompt = run_command.call_args.args[0][-1]
-            self.assertIn("Source preprocessing is `disabled`.", prompt)
-            self.assertIn("Use `inputs/sources.csv` directly as the source inventory", prompt)
+            # Source preprocessing state now travels in the compiled RUN CONTRACT block.
+            self.assertIn("- source_ingest_enabled: false", prompt)
+            self.assertIn("- sources_path: inputs/sources.csv", prompt)
             self.assert_no_ingest_artifacts_in_prompt(prompt)
 
     def test_cli_values_override_config_profile_values(self) -> None:

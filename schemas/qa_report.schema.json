@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine QA report",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "overall_status": {
+      "type": "string",
+      "enum": ["pass", "pass_with_warnings", "fail"]
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "issue_id": {"type": "string", "pattern": "^QA-[0-9]+$"},
+          "priority": {"type": "string", "enum": ["blocking", "high", "normal"]},
+          "issue": {"type": "string", "minLength": 1},
+          "contract_reference": {"type": "string"},
+          "why_it_matters": {"type": "string"},
+          "required_fix": {"type": "string", "minLength": 1}
+        },
+        "required": ["issue_id", "priority", "issue", "required_fix"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "overall_status", "issues"],
+  "allOf": [
+    {
+      "if": {
+        "properties": {"overall_status": {"const": "fail"}},
+        "required": ["overall_status"]
+      },
+      "then": {
+        "properties": {
+          "issues": {
+            "contains": {
+              "type": "object",
+              "properties": {"priority": {"const": "blocking"}},
+              "required": ["priority"]
+            },
+            "minContains": 1
+          }
+        }
+      }
+    }
+  ]
+}

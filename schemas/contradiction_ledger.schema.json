@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine contradiction and gap ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "contradictions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "contradiction_id": {"type": "string", "minLength": 1},
+          "question_id": {"type": "string", "minLength": 1},
+          "statement": {"type": "string", "minLength": 1},
+          "evidence_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "conflict_kind": {
+            "type": "string",
+            "enum": [
+              "different_values",
+              "different_timeframe",
+              "different_scope",
+              "different_unit",
+              "issuer_vs_independent",
+              "unresolved"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "enum": ["resolved", "unresolved", "qualified_in_article"]
+          },
+          "resolution_note": {"type": "string"}
+        },
+        "required": [
+          "contradiction_id",
+          "question_id",
+          "statement",
+          "evidence_ids",
+          "conflict_kind",
+          "resolution"
+        ]
+      }
+    },
+    "duplicates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "kept_evidence_id": {"type": "string", "minLength": 1},
+          "duplicate_evidence_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "required": ["kept_evidence_id", "duplicate_evidence_ids"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "contradictions"]
+}

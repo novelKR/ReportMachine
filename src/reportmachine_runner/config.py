@@ -14,6 +14,7 @@ PROFILE_KEYS = {
     "allow_shell_network",
     "source_ingest",
     "summary",
+    "publish",
     "run_id_prefix",
     "artifacts",
 }
@@ -43,6 +44,24 @@ SUMMARY_KEYS = {
     "negative_prompt",
     "max_visual_claims",
     "require_source_footer",
+}
+PUBLISH_KEYS = {
+    "enabled",
+    "paper_size",
+    "orientation",
+    "margin_mm",
+    "body_font_size",
+    "body_leading",
+    "font_regular",
+    "font_bold",
+    "heading_color",
+    "caption_color",
+    "rule_color",
+    "table_header_color",
+    "include_cover",
+    "include_toc",
+    "include_link_footnotes",
+    "max_image_height_ratio",
 }
 
 SUMMARY_IMAGE_GENERATION_SURFACE = "codex_internal_tool"
@@ -82,6 +101,26 @@ class SummaryProfile:
 
 
 @dataclass(frozen=True)
+class PublishProfile:
+    enabled: bool = False
+    paper_size: str = "A4"
+    orientation: str = "portrait"
+    margin_mm: float = 20.0
+    body_font_size: float = 10.5
+    body_leading: float = 17.5
+    font_regular: str | None = None
+    font_bold: str | None = None
+    heading_color: str = "#12263a"
+    caption_color: str = "#5a6672"
+    rule_color: str = "#c8d0d8"
+    table_header_color: str = "#eef2f6"
+    include_cover: bool = True
+    include_toc: bool = True
+    include_link_footnotes: bool = True
+    max_image_height_ratio: float = 0.6
+
+
+@dataclass(frozen=True)
 class RunnerProfile:
     mode: str | None = None
     topic: str | None = None
@@ -91,6 +130,7 @@ class RunnerProfile:
     allow_shell_network: bool | None = None
     source_ingest: SourceIngestProfile = SourceIngestProfile()
     summary: SummaryProfile = SummaryProfile()
+    publish: PublishProfile = PublishProfile()
     run_id_prefix: str | None = None
     artifacts: ArtifactProfile = ArtifactProfile()
 
@@ -155,6 +195,26 @@ def _string(value: Any, label: str, default: str) -> str:
 def _non_negative_int(value: Any, label: str, default: int) -> int:
     parsed = _optional_non_negative_int(value, label)
     return default if parsed is None else parsed
+
+
+def _positive_float(value: Any, label: str, default: float) -> float:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a positive number")
+    if value <= 0:
+        raise ValueError(f"{label} must be a positive number")
+    return float(value)
+
+
+def _ratio(value: Any, label: str, default: float) -> float:
+    if value is None:
+        return default
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"{label} must be a number greater than 0 and at most 1")
+    if not 0 < value <= 1:
+        raise ValueError(f"{label} must be a number greater than 0 and at most 1")
+    return float(value)
 
 
 def _optional_string_tuple(value: Any, label: str) -> tuple[str, ...]:
@@ -229,6 +289,15 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
         summary_table,
         SUMMARY_KEYS,
         f"profiles.{profile_name}.summary",
+    )
+    publish_table = _require_mapping(
+        profile.get("publish", {}),
+        f"profiles.{profile_name}.publish",
+    )
+    _validate_keys(
+        publish_table,
+        PUBLISH_KEYS,
+        f"profiles.{profile_name}.publish",
     )
 
     artifacts = ArtifactProfile(
@@ -340,6 +409,92 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
             f"{profile_name}.summary.image_generation_surface must be {SUMMARY_IMAGE_GENERATION_SURFACE!r}"
         )
 
+    publish_defaults = PublishProfile()
+    publish = PublishProfile(
+        enabled=_bool(
+            publish_table.get("enabled"),
+            f"profiles.{profile_name}.publish.enabled",
+            publish_defaults.enabled,
+        ),
+        paper_size=_string(
+            publish_table.get("paper_size"),
+            f"profiles.{profile_name}.publish.paper_size",
+            publish_defaults.paper_size,
+        ),
+        orientation=_string(
+            publish_table.get("orientation"),
+            f"profiles.{profile_name}.publish.orientation",
+            publish_defaults.orientation,
+        ),
+        margin_mm=_positive_float(
+            publish_table.get("margin_mm"),
+            f"profiles.{profile_name}.publish.margin_mm",
+            publish_defaults.margin_mm,
+        ),
+        body_font_size=_positive_float(
+            publish_table.get("body_font_size"),
+            f"profiles.{profile_name}.publish.body_font_size",
+            publish_defaults.body_font_size,
+        ),
+        body_leading=_positive_float(
+            publish_table.get("body_leading"),
+            f"profiles.{profile_name}.publish.body_leading",
+            publish_defaults.body_leading,
+        ),
+        font_regular=_optional_string(
+            publish_table.get("font_regular"),
+            f"profiles.{profile_name}.publish.font_regular",
+        ),
+        font_bold=_optional_string(
+            publish_table.get("font_bold"),
+            f"profiles.{profile_name}.publish.font_bold",
+        ),
+        heading_color=_string(
+            publish_table.get("heading_color"),
+            f"profiles.{profile_name}.publish.heading_color",
+            publish_defaults.heading_color,
+        ),
+        caption_color=_string(
+            publish_table.get("caption_color"),
+            f"profiles.{profile_name}.publish.caption_color",
+            publish_defaults.caption_color,
+        ),
+        rule_color=_string(
+            publish_table.get("rule_color"),
+            f"profiles.{profile_name}.publish.rule_color",
+            publish_defaults.rule_color,
+        ),
+        table_header_color=_string(
+            publish_table.get("table_header_color"),
+            f"profiles.{profile_name}.publish.table_header_color",
+            publish_defaults.table_header_color,
+        ),
+        include_cover=_bool(
+            publish_table.get("include_cover"),
+            f"profiles.{profile_name}.publish.include_cover",
+            publish_defaults.include_cover,
+        ),
+        include_toc=_bool(
+            publish_table.get("include_toc"),
+            f"profiles.{profile_name}.publish.include_toc",
+            publish_defaults.include_toc,
+        ),
+        include_link_footnotes=_bool(
+            publish_table.get("include_link_footnotes"),
+            f"profiles.{profile_name}.publish.include_link_footnotes",
+            publish_defaults.include_link_footnotes,
+        ),
+        max_image_height_ratio=_ratio(
+            publish_table.get("max_image_height_ratio"),
+            f"profiles.{profile_name}.publish.max_image_height_ratio",
+            publish_defaults.max_image_height_ratio,
+        ),
+    )
+    if publish.orientation not in {"portrait", "landscape"}:
+        raise ValueError(
+            f"profiles.{profile_name}.publish.orientation must be 'portrait' or 'landscape'"
+        )
+
     return RunnerProfile(
         mode=_optional_string(profile.get("mode"), f"profiles.{profile_name}.mode"),
         topic=_optional_string(profile.get("topic"), f"profiles.{profile_name}.topic"),
@@ -355,6 +510,7 @@ def load_profile_config(config_path: Path, profile_name: str) -> RunnerProfile:
         ),
         source_ingest=source_ingest,
         summary=summary,
+        publish=publish,
         run_id_prefix=_optional_string(
             profile.get("run_id_prefix"),
             f"profiles.{profile_name}.run_id_prefix",

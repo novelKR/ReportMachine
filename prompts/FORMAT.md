@@ -4,6 +4,9 @@ This file defines the minimum structural and formatting floor for ReportMachine 
 
 Do not copy the same external skeleton across articles. A valid article can have different section names and order each time, as long as it satisfies this floor and the narrative rules in `PROMPT.md`.
 
+`prompts/core/CORE_POLICY.md` outranks this file. Formatting preferences are the lowest priority (Q6) and
+must never override accuracy, scope fidelity, or honest uncertainty.
+
 ## Korean Output Contract
 
 Final article prose must be natural Korean in honorific style (`~입니다`, `~합니다`). Keep Korean output literals where specified, including the article title/subtitle format, scorecard label `한눈에 보기`, Korean disclaimer intent, and Korean citation examples.
@@ -74,6 +77,18 @@ End with:
 - A note that numbers and images follow cited source materials.
 - A categorized reference list.
 
+### 1.8 Article And Research Appendix Split
+
+Publishable output is two files:
+
+- `article.md` - the reader's article.
+- `research_appendix.md` - evidence grading, search scope and absence-search logs, source limitations,
+  verification and falsification indicator tables, evidence-class breakdowns, and long supporting tables.
+
+Keep in the article body only the methodology and source-limitation detail a reader needs to trust the
+argument. Move the rest to the appendix. The appendix is not a dumping ground: it must stay organized
+and readable, and it never introduces claims absent from the article's evidence set.
+
 ---
 
 ## 2. Anti-Repetition Rules
@@ -102,7 +117,8 @@ Avoid repeating `### 1.1 ...`, `### 1.2 ...`, `### 1.3 ...` style article sectio
 
 One topic should become one complete report.
 
-Default length: 600-900 lines. Upper range: about 1,200 lines.
+There is no line-count target. Length follows the argument. The run's intent contract selects a depth
+level (`brief`, `standard`, `deep`) that describes analytical ambition, not output volume.
 
 Do not split a topic into thin installments just to create a series.
 
@@ -110,7 +126,7 @@ Do not split a topic into thin installments just to create a series.
 
 Use a series only when:
 
-- One article would exceed about 1,500 lines.
+- The topic cannot be argued completely in one article.
 - The topic naturally divides into two or three large independent questions.
 - Time-staged updates are part of the subject.
 
@@ -177,10 +193,12 @@ Every listed reference needs a URL.
 
 - [ ] General articles contain zero prohibited financial or valuation metrics.
 - [ ] Company discussion stays on technology, operations, supply chain, positioning, customers, partnerships, market share, capacity, patents, certification, or maturity.
-- [ ] Images normally total 6-12 and follow `PROMPT.md` §7.
+- [ ] Image count follows evidence need, not a quota; 0-6 is normal and 0 is valid (`PROMPT.md` §7.5).
+- [ ] Every kept image records visual_question, supported_claim_ids, and why_prose_is_insufficient.
 - [ ] Zero AI-generated images.
 - [ ] Every quantitative claim has a primary source URL or explicit uncertainty qualifier.
-- [ ] 600-900 lines is the normal target; under 400 lines usually feels incomplete.
+- [ ] No line-count target was pursued; every section carries a new claim or causal link.
+- [ ] Methodology, search scope, and source-limitation tables sit in `research_appendix.md`.
 - [ ] No self-invented classification system unless grounded in a cited external standard.
 
 ### 5.4 Short Section Cleanup

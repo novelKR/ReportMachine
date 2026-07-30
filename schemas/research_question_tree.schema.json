@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine research question tree",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "central_question": {"type": "string", "minLength": 1},
+    "base_date": {"type": "string"},
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "question_id": {"type": "string", "minLength": 1},
+          "question": {"type": "string", "minLength": 1},
+          "why_needed": {"type": "string"},
+          "importance": {"type": "string", "enum": ["p0", "p1", "p2"]},
+          "hypotheses": {
+            "type": "array",
+            "minItems": 2,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "confirming_evidence_needed": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "disconfirming_evidence_needed": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "source_roles": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "max_source_age": {"type": ["string", "null"]},
+          "stop_conditions": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "required": [
+          "question_id",
+          "question",
+          "importance",
+          "hypotheses",
+          "confirming_evidence_needed",
+          "disconfirming_evidence_needed",
+          "stop_conditions"
+        ]
+      }
+    },
+    "lanes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "lane_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9_]*$"
+          },
+          "title": {"type": "string", "minLength": 1},
+          "question_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "search_focus": {"type": "string"}
+        },
+        "required": ["lane_id", "title", "question_ids"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "central_question", "questions", "lanes"]
+}

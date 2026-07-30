@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "publish_type": {
+      "type": "string",
+      "enum": ["a4_pdf"]
+    },
+    "source_article": {
+      "type": "string"
+    },
+    "source_article_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "source_result": {
+      "type": "string"
+    },
+    "source_result_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "render_surface": {
+      "type": "string",
+      "const": "local_deterministic_renderer"
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "figure_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "font_regular": {
+      "type": "string"
+    },
+    "font_bold": {
+      "type": ["string", "null"]
+    },
+    "output_files": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "article_pdf": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/publish/article\\.pdf$"
+        },
+        "publish_figure_map_csv": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/publish/publish_figure_map\\.csv$"
+        },
+        "publish_manifest_json": {
+          "type": "string",
+          "pattern": "^outputs/[A-Za-z0-9][A-Za-z0-9_.-]*/publish/publish_manifest\\.json$"
+        }
+      },
+      "required": [
+        "article_pdf",
+        "publish_figure_map_csv",
+        "publish_manifest_json"
+      ]
+    },
+    "critical_warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "checklist_status": {
+      "type": "string",
+      "enum": ["pass", "pass_with_warnings", "fail"]
+    }
+  },
+  "required": [
+    "publish_type",
+    "source_article",
+    "source_article_sha256",
+    "source_result",
+    "source_result_sha256",
+    "render_surface",
+    "page_count",
+    "figure_count",
+    "font_regular",
+    "font_bold",
+    "output_files",
+    "critical_warnings",
+    "checklist_status"
+  ]
+}

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from .paths import resolve_under_root
+from .agent_attempts import collect_agent_executions
+from .roles import CORE_PROMPT_FILES, ROLE_CARDS
 
 
 PROMPT_FILES_BY_MODE = {
@@ -39,7 +41,46 @@ SCHEMA_FILES = [
     "schemas/preflight_result.schema.json",
     "schemas/claim_ledger.schema.json",
     "schemas/earnings_delta.schema.json",
+    "schemas/intent_contract.schema.json",
+    "schemas/evidence_card.schema.json",
+    "schemas/research_question_tree.schema.json",
+    "schemas/thesis_decision.schema.json",
+    "schemas/narrative_plan.schema.json",
+    "schemas/paragraph_map.schema.json",
+    "schemas/final_sync_report.schema.json",
+    "schemas/citation_logic_report.schema.json",
+    "schemas/red_team_report.schema.json",
+    "schemas/qa_report.schema.json",
+    "schemas/compression_report.schema.json",
+    "schemas/image_audit_report.schema.json",
+    "schemas/revision_notes.schema.json",
 ]
+
+AGENT_CONFIG_GLOB = ".codex/agents"
+
+
+def _agent_config_files(root: Path) -> list[str]:
+    directory = root / AGENT_CONFIG_GLOB
+    if not directory.is_dir():
+        return []
+    return sorted(
+        path.relative_to(root).as_posix() for path in directory.glob("*.toml")
+    )
+
+
+def effective_prompt_hashes(root: Path, contracts_dir: str | None) -> dict[str, str | None]:
+    if not contracts_dir:
+        return {}
+    try:
+        directory = resolve_under_root(root, contracts_dir)
+    except ValueError:
+        return {}
+    if not directory.is_dir():
+        return {}
+    hashes: dict[str, str | None] = {}
+    for path in sorted(directory.glob("effective_prompt_*.md")):
+        hashes[path.relative_to(root.resolve()).as_posix()] = file_sha256(path)
+    return hashes
 
 
 def _now_iso() -> str:
@@ -147,14 +188,22 @@ def build_run_manifest(
     source_ingest_enabled: bool,
     source_candidate_ledger: str,
     paths: dict[str, str | None],
+    agents_dir: str | None = None,
+    contracts_dir: str | None = None,
+    phase_history: list[dict[str, Any]] | None = None,
+    analysis_modes: tuple[str, ...] = (),
+    depth: str = "",
 ) -> dict[str, Any]:
     git_commit = _git_output(root, ["rev-parse", "HEAD"])
     prompt_files = PROMPT_FILES_BY_MODE.get(mode, PROMPT_FILES_BY_MODE["industry"])
+    prompt_files = list(prompt_files) + list(CORE_PROMPT_FILES)
     return {
         "version": 1,
         "run_id": run_id,
         "article_type": mode,
         "phase": phase,
+        "analysis_modes": list(analysis_modes),
+        "depth": depth,
         "generated_at": _now_iso(),
         "git": {
             "commit": git_commit,
@@ -162,8 +211,13 @@ def build_run_manifest(
         },
         "codex_cli": _codex_version(codex_bin, root),
         "prompt_hashes": _hash_repo_files(root, prompt_files),
+        "role_card_hashes": _hash_repo_files(root, list(ROLE_CARDS)),
+        "agent_config_hashes": _hash_repo_files(root, _agent_config_files(root)),
+        "effective_prompt_hashes": effective_prompt_hashes(root, contracts_dir),
         "schema_hashes": _hash_repo_files(root, sorted(set(SCHEMA_FILES + [schema]))),
         "source_hashes": _read_source_hashes(root, source_candidate_ledger),
+        "agent_executions": collect_agent_executions(root, agents_dir) if agents_dir else [],
+        "phase_history": phase_history or [],
         "codex_config_effective": {
             "web_search": web_search,
             "sandbox_mode": "workspace-write",

@@ -8,6 +8,7 @@ from .codex_exec import CodexExecConfig, build_command
 from .paths import as_posix_arg
 from .prompt import build_prompt
 from .run_context import RunContext
+from .publish import PublishSourcePaths, build_publish_run_config
 from .summary import SUMMARY_SCHEMA, SummarySourcePaths, build_summary_run_config
 
 
@@ -22,6 +23,7 @@ class RunConfigs:
     draft_command: list[str]
     artifact_paths: ArtifactPaths
     summary_config: object
+    publish_config: object
 
 
 def build_prompt_kwargs(context: RunContext) -> dict[str, object]:
@@ -33,8 +35,7 @@ def build_prompt_kwargs(context: RunContext) -> dict[str, object]:
         "sources_path": context.sources_path,
         "work_run_dir": as_posix_arg(context.work_run_dir),
         "draft_output": as_posix_arg(context.draft_output),
-        "image_notes_dir": as_posix_arg(context.image_notes_dir),
-        "image_ledger_candidate": as_posix_arg(context.image_ledger_candidate),
+        "image_audit_report": context.run_artifacts.image_audit_report,
         "source_ingest_manifest": as_posix_arg(context.source_ingest_paths.manifest),
         "source_candidate_ledger": as_posix_arg(context.source_ingest_paths.source_candidate_ledger),
         "pdf_index": as_posix_arg(context.source_ingest_paths.pdf_index),
@@ -92,8 +93,6 @@ def build_run_configs(
         earnings_delta_matrix_md=as_posix_arg(context.earnings_delta_matrix_md),
         work_run_dir=as_posix_arg(context.work_run_dir),
         draft_output=as_posix_arg(context.draft_output),
-        image_notes_dir=as_posix_arg(context.image_notes_dir),
-        image_ledger_candidate=as_posix_arg(context.image_ledger_candidate),
         source_ingest_manifest=as_posix_arg(context.source_ingest_paths.manifest),
         source_candidate_ledger=as_posix_arg(context.source_ingest_paths.source_candidate_ledger),
         pdf_index=as_posix_arg(context.source_ingest_paths.pdf_index),
@@ -129,6 +128,7 @@ def build_run_configs(
         earnings_delta_matrix_output=as_posix_arg(context.earnings_delta_matrix_output),
         earnings_delta_matrix_md=as_posix_arg(context.earnings_delta_matrix_md),
         summary_dir=f"outputs/{context.run_id}/summary" if context.summary_output_enabled else None,
+        publish_dir=f"outputs/{context.run_id}/publish" if context.publish_pdf_enabled else None,
     )
     summary_config = build_summary_run_config(
         root=context.root,
@@ -138,6 +138,17 @@ def build_run_configs(
         web_search="disabled",
         profile=context.profile.summary,
         sources=SummarySourcePaths(
+            article_result=as_posix_arg(context.output),
+            article=as_posix_arg(context.article_output),
+            source_ledger=as_posix_arg(context.source_ledger_output),
+            image_ledger=as_posix_arg(context.image_ledger_output),
+        ),
+    )
+    publish_config = build_publish_run_config(
+        root=context.root,
+        run_id=context.run_id,
+        profile=context.profile.publish,
+        sources=PublishSourcePaths(
             article_result=as_posix_arg(context.output),
             article=as_posix_arg(context.article_output),
             source_ledger=as_posix_arg(context.source_ledger_output),
@@ -154,4 +165,5 @@ def build_run_configs(
         draft_command=build_command(draft_config),
         artifact_paths=artifact_paths,
         summary_config=summary_config,
+        publish_config=publish_config,
     )

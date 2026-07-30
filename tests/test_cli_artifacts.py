@@ -26,9 +26,6 @@ preserve_cache_on_failure = true
             def fake_run(command: list[str], *, cwd: Path) -> int:
                 captured_command.extend(command)
                 self.assertEqual(cwd, root.resolve())
-                work_draft = root / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
-                work_draft.parent.mkdir(parents=True, exist_ok=True)
-                work_draft.write_text("draft", encoding="utf-8")
                 self.write_default_outputs(root)
                 return 0
 
@@ -117,14 +114,25 @@ preserve_cache_on_failure = true
 """.lstrip(),
             )
 
-            def fake_run(_command: list[str], *, cwd: Path) -> int:
+            def fake_run(
+                _command: list[str],
+                *,
+                cwd: Path,
+                stdout_path: Path | None = None,
+                stderr_path: Path | None = None,
+                **_kwargs,
+            ) -> int:
+                for log_path in (stdout_path, stderr_path):
+                    if log_path is not None:
+                        log_path.parent.mkdir(parents=True, exist_ok=True)
+                        log_path.write_text("", encoding="utf-8")
                 work_draft = cwd / "work" / "runs" / "test_run" / "drafts" / "draft_article.md"
                 work_draft.parent.mkdir(parents=True, exist_ok=True)
                 work_draft.write_text("partial draft", encoding="utf-8")
                 return 7
 
             with patch("reportmachine_runner.workflow.run_command", side_effect=fake_run):
-                status, _ = self.run_cli(
+                status, output = self.run_cli(
                     [
                         "--project-root",
                         str(root),
@@ -135,7 +143,8 @@ preserve_cache_on_failure = true
                     ]
                 )
 
-            self.assertEqual(status, 7)
+            self.assertEqual(status, 2, output)
+            self.assertIn("finalize_upstream_mutation", output)
             self.assertTrue((root / "work" / "runs" / "test_run").is_dir())
             self.assertEqual(
                 (

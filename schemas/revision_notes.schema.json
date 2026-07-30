@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine revision notes",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "handled_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_report": {
+            "type": "string",
+            "enum": ["citation_logic", "red_team", "qa_report", "compression", "image_audit"]
+          },
+          "issue_id": {"type": "string", "minLength": 1},
+          "resolution": {
+            "type": "string",
+            "enum": ["fixed", "qualified", "declined_with_reason"]
+          },
+          "note": {"type": "string", "minLength": 1}
+        },
+        "required": ["source_report", "issue_id", "resolution", "note"]
+      }
+    },
+    "unresolved_blocking_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_report": {
+            "type": "string",
+            "enum": ["citation_logic", "red_team", "qa_report", "compression", "image_audit"]
+          },
+          "issue_id": {"type": "string", "minLength": 1},
+          "note": {"type": "string", "minLength": 1}
+        },
+        "required": ["source_report", "issue_id", "note"]
+      }
+    }
+  },
+  "required": ["version", "run_id", "handled_issues", "unresolved_blocking_issues"]
+}

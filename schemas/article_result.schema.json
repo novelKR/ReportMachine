@@ -7,6 +7,25 @@
       "type": "string",
       "enum": ["industry", "earnings", "preview"]
     },
+    "analysis_modes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "industry_structure",
+          "company_fundamental",
+          "market_reaction",
+          "event_analysis",
+          "earnings_quality",
+          "technology_validation"
+        ]
+      }
+    },
+    "article_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the frozen article.md content."
+    },
     "title": {
       "type": "string"
     },
@@ -86,6 +105,15 @@
         "run_manifest_json": {
           "type": "string"
         },
+        "research_appendix_md": {
+          "type": ["string", "null"]
+        },
+        "paragraph_map_json": {
+          "type": ["string", "null"]
+        },
+        "final_sync_report_json": {
+          "type": ["string", "null"]
+        },
         "earnings_delta_matrix_json": {
           "type": ["string", "null"]
         },
@@ -115,6 +143,7 @@
   },
   "required": [
     "article_type",
+    "article_sha256",
     "title",
     "subtitle",
     "one_sentence_insight",

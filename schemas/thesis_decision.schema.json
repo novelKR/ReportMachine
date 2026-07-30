@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReportMachine thesis decision",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {"type": "integer", "minimum": 1},
+    "run_id": {"type": "string", "minLength": 1},
+    "hypotheses": {
+      "type": "array",
+      "minItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hypothesis_id": {"type": "string", "minLength": 1},
+          "statement": {"type": "string", "minLength": 1},
+          "user_fit": {"type": "string", "enum": ["high", "medium", "low"]},
+          "evidence_coverage": {"type": "string", "enum": ["high", "medium", "low"]},
+          "falsifiability": {"type": "string", "minLength": 1},
+          "explanatory_power": {"type": "string", "enum": ["high", "medium", "low"]},
+          "originality": {"type": "string", "enum": ["high", "medium", "low"]},
+          "overreach_risk": {"type": "string", "enum": ["high", "medium", "low"]},
+          "supporting_evidence_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "counter_evidence_ids": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          }
+        },
+        "required": [
+          "hypothesis_id",
+          "statement",
+          "user_fit",
+          "evidence_coverage",
+          "falsifiability",
+          "explanatory_power",
+          "overreach_risk"
+        ]
+      }
+    },
+    "chosen_hypothesis_id": {"type": "string", "minLength": 1},
+    "selection_rationale": {"type": "string", "minLength": 1},
+    "rejection_reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hypothesis_id": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1},
+          "retained_as_branch": {"type": "boolean"}
+        },
+        "required": ["hypothesis_id", "reason"]
+      }
+    },
+    "falsification_conditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "central_sentence": {"type": "string", "minLength": 1}
+  },
+  "required": [
+    "version",
+    "run_id",
+    "hypotheses",
+    "chosen_hypothesis_id",
+    "selection_rationale",
+    "falsification_conditions",
+    "central_sentence"
+  ]
+}
