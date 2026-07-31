@@ -58,6 +58,7 @@ class PhaseOutcome:
     status: int
     label: str
     messages: tuple[str, ...] = ()
+    recovery_required: bool = False
 
     @property
     def ok(self) -> bool:
@@ -322,6 +323,7 @@ class PhaseRunner:
                 status=2,
                 label=f"{phase}_role_process_cleanup_fail",
                 messages=tuple(errors),
+                recovery_required=True,
             )
         if restore_errors:
             return PhaseOutcome(

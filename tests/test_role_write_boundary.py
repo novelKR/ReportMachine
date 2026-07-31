@@ -948,6 +948,7 @@ class RoleWriteBoundaryTests(unittest.TestCase):
 
         self.assertEqual(outcome.status, 2)
         self.assertIn("process_cleanup_fail", outcome.label)
+        self.assertTrue(outcome.recovery_required)
         for validator in (
             scope_validate,
             output_validate,
@@ -1452,6 +1453,39 @@ class RoleWriteBoundaryTests(unittest.TestCase):
                 sys.settrace(None)
 
         self.assertTrue(delivered)
+        self.assertEqual(status, 128 + signal.SIGTERM)
+        cleanup.assert_called_once_with(process)
+        self.assertIs(signal.getsignal(signal.SIGTERM), previous_handler)
+
+    @unittest.skipUnless(os.name == "posix", "role SIGTERM guard requires POSIX")
+    def test_sigterm_during_popen_assignment_is_cleaned_after_process_ownership(self) -> None:
+        temporary, fixture = self.fixture()
+        self.addCleanup(temporary.cleanup)
+        process = Mock(pid=123)
+        process.wait.return_value = 0
+        original_handler = signal.getsignal(signal.SIGTERM)
+
+        def previous_handler(_signum, _frame) -> None:
+            self.fail("previous SIGTERM handler must not run inside a role call")
+
+        signal.signal(signal.SIGTERM, previous_handler)
+        self.addCleanup(signal.signal, signal.SIGTERM, original_handler)
+
+        def spawn_and_deliver(*_args, **_kwargs):
+            handler = signal.getsignal(signal.SIGTERM)
+            assert callable(handler)
+            handler(signal.SIGTERM, None)
+            return process
+
+        with (
+            patch(
+                "reportmachine_runner.codex_exec.subprocess.Popen",
+                side_effect=spawn_and_deliver,
+            ),
+            patch("reportmachine_runner.codex_exec._cleanup_role_process_group") as cleanup,
+        ):
+            status = run_command(RoleCommand(["codex", "exec"]), cwd=fixture.root)
+
         self.assertEqual(status, 128 + signal.SIGTERM)
         cleanup.assert_called_once_with(process)
         self.assertIs(signal.getsignal(signal.SIGTERM), previous_handler)

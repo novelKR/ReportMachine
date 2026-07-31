@@ -12,12 +12,29 @@ from pathlib import Path, PureWindowsPath
 from typing import Callable, Sequence
 
 from .artifacts import ArtifactSyncConfig
+from .execution_control import active_writer_lock_fd
 from .paths import resolve_under_root
 
 
 _ROLE_GROUP_TERM_TIMEOUT_SECONDS = 5.0
 _ROLE_GROUP_KILL_TIMEOUT_SECONDS = 5.0
 _ROLE_GROUP_POLL_SECONDS = 0.05
+
+# One runner-owned contract drives both promotion and read-only membership checks.
+# Tuple items are (run_manifest.paths key, CodexExecConfig field name).
+LATEST_REQUIRED_OUTPUTS = (
+    ("article_result", "output"),
+    ("article", "article_output"),
+    ("source_ledger", "source_ledger_output"),
+    ("image_ledger", "image_ledger_output"),
+    ("claim_ledger", "claim_ledger_output"),
+    ("preflight_result", "preflight_result_output"),
+    ("run_manifest", "run_manifest_output"),
+)
+LATEST_OPTIONAL_OUTPUTS = (
+    ("earnings_delta_matrix", "earnings_delta_matrix_output"),
+    ("earnings_delta_matrix_md", "earnings_delta_matrix_md"),
+)
 
 
 class RoleProcessCleanupError(RuntimeError):
@@ -31,6 +48,13 @@ class _RoleSigtermTermination(SystemExit):
         self.signum = signum
         self.returncode = 128 + signum
         super().__init__(self.returncode)
+
+
+def _active_writer_pass_fds() -> tuple[int, ...]:
+    """Return the one POSIX lease descriptor admitted to supported child commands."""
+
+    writer_lock_fd = active_writer_lock_fd()
+    return (writer_lock_fd,) if writer_lock_fd is not None else ()
 
 
 class _RoleSigtermGuard:
@@ -421,7 +445,8 @@ def _run_role_command(
     try:
         try:
             sigterm_guard.install()
-            sigterm_guard.arm_execution()
+            if sigterm_guard.termination is not None:
+                raise sigterm_guard.termination
             try:
                 process = subprocess.Popen(
                     list(command),
@@ -431,7 +456,12 @@ def _run_role_command(
                     stdout=stdout_target,
                     stderr=stderr_target,
                     start_new_session=True,
+                    pass_fds=_active_writer_pass_fds(),
                 )
+                # A signal during Popen is latched without unwinding before assignment.
+                # Once the process object is owned, arming either raises the pending
+                # termination into the normal cleanup path or begins live interruption.
+                sigterm_guard.arm_execution()
                 try:
                     if not periodic:
                         status = process.wait()
@@ -553,6 +583,9 @@ def run_command(
     stderr_handle = stderr_path.open(log_mode, encoding="utf-8") if stderr_path else None
     stdout_target = stdout_handle if stdout_handle is not None else None
     stderr_target = stderr_handle if stderr_handle is not None else None
+    inherited_lock_kwargs: dict[str, object] = {}
+    if os.name == "posix":
+        inherited_lock_kwargs["pass_fds"] = _active_writer_pass_fds()
     if snapshot_callback is None or snapshot_interval_seconds <= 0:
         try:
             return subprocess.run(
@@ -563,6 +596,7 @@ def run_command(
                 check=False,
                 stdout=stdout_target,
                 stderr=stderr_target,
+                **inherited_lock_kwargs,
             ).returncode
         finally:
             if stdout_handle is not None:
@@ -577,6 +611,7 @@ def run_command(
         text=True,
         stdout=stdout_target,
         stderr=stderr_target,
+        **inherited_lock_kwargs,
     )
     try:
         next_snapshot = time.monotonic() + snapshot_interval_seconds
@@ -1555,19 +1590,16 @@ def mirror_latest_outputs(config: CodexExecConfig) -> None:
     if temp_dir.exists():
         shutil.rmtree(temp_dir)
     temp_dir.mkdir(parents=True, exist_ok=True)
-    for source_value in [
-        config.output,
-        config.article_output,
-        config.source_ledger_output,
-        config.image_ledger_output,
-        config.claim_ledger_output,
-        config.preflight_result_output,
-        config.run_manifest_output,
-        config.earnings_delta_matrix_output,
-        config.earnings_delta_matrix_md,
-    ]:
+    for _manifest_key, field_name in (
+        *LATEST_REQUIRED_OUTPUTS,
+        *LATEST_OPTIONAL_OUTPUTS,
+    ):
+        source_value = getattr(config, field_name)
         source = resolve_under_root(config.root, source_value)
-        if source_value in {config.earnings_delta_matrix_output, config.earnings_delta_matrix_md} and not source.is_file():
+        if (
+            (_manifest_key, field_name) in LATEST_OPTIONAL_OUTPUTS
+            and not source.is_file()
+        ):
             continue
         if not source.is_file():
             raise FileNotFoundError(

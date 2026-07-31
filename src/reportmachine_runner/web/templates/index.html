@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ReportMachine local control</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+    {% if authenticated %}<meta name="reportmachine-csrf" content="{{ csrf_token }}">{% endif %}
+  </head>
+  <body data-authenticated="{{ 'true' if authenticated else 'false' }}">
+    <main>
+      <h1>ReportMachine 로컬 제어</h1>
+      {% if not authenticated %}
+      <form id="bootstrap-form" autocomplete="off">
+        <label for="capability">One-time bootstrap capability</label>
+        <input id="capability" name="capability" type="password" required autocomplete="off">
+        <button type="submit">Open local session</button>
+      </form>
+      {% else %}
+      <p id="connection">Connected to {{ origin }}.</p>
+      <p class="notice">프로세스 종료 상태와 기사 유효성은 서로 다른 판정입니다. 기사 성공은 현재 artifact·schema·provenance·audit 결과로만 표시됩니다.</p>
+      <section aria-labelledby="status-heading">
+        <h2 id="status-heading">실행 및 기사 상태</h2>
+        <dl id="status-summary"><dt>상태</dt><dd>불러오는 중…</dd></dl>
+        <details><summary>원시 상태 JSON</summary><pre id="status">Loading…</pre></details>
+      </section>
+      <section aria-labelledby="scope-heading">
+        <h2 id="scope-heading">범위 검토</h2>
+        <dl id="scope-summary"><dt>상태</dt><dd>run을 선택하면 표시됩니다.</dd></dl>
+      </section>
+      <section aria-labelledby="artifact-heading">
+        <h2 id="artifact-heading">완료 artifact</h2>
+        <nav id="artifacts" aria-label="artifact downloads">현재 유효 상태를 확인한 뒤 표시됩니다.</nav>
+      </section>
+      <section aria-labelledby="log-heading">
+        <h2 id="log-heading">Supervisor log</h2>
+        <pre id="log">Loading…</pre>
+      </section>
+      <form id="action-form">
+        <h2>Start action</h2>
+        <label>Action <select name="action"><option value="prepare">prepare</option><option value="run_all">run_all</option><option value="smoke">smoke</option><option value="allowed_phase">allowed_phase</option><option value="audit">audit</option><option value="approve_scope">approve_scope</option></select></label>
+        <label>Mode <select name="mode"><option value="industry">industry</option><option value="earnings">earnings</option><option value="preview">preview</option></select></label>
+        <label>Run ID <input name="run_id" required pattern="[A-Za-z0-9][A-Za-z0-9_.-]*"></label>
+        <label>Topic (only prepare, smoke, or run all) <textarea name="topic"></textarea></label>
+        <label>Allowed phase <select name="phase"><option value="scope">scope</option><option value="research-plan">research-plan</option><option value="research">research</option><option value="evidence">evidence</option><option value="narrative">narrative</option><option value="draft">draft</option><option value="review">review</option><option value="revise">revise</option><option value="finalize">finalize</option></select></label>
+        <label>Scope SHA-256 <input name="scope_sha256" pattern="[0-9a-f]{64}" autocomplete="off"></label>
+        <label><input name="confirm_rerun" type="checkbox"> 같은 run·action을 새 execution으로 명시적 재실행</label>
+        <button type="submit">Start</button>
+      </form>
+      <button id="cancel" type="button">Cancel active execution</button>
+      <button id="recover" type="button">검사 후 recovery 상태 승인</button>
+      <section aria-labelledby="fallback-heading">
+        <h2 id="fallback-heading">CLI fallback</h2>
+        <p>Web을 쓰지 않아도 기존 명령을 그대로 사용할 수 있습니다. 충돌 시 exit 75는 busy, exit 76은 명시적 복구 승인이 필요함을 뜻합니다.</p>
+        <pre>python3 scripts/run_article.py --mode industry --run-id &lt;run_id&gt; --phase all
+python3 scripts/run_article.py --acknowledge-execution-recovery &lt;lease_id&gt;</pre>
+      </section>
+      <p id="message" role="status"></p>
+      {% endif %}
+    </main>
+    <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+  </body>
+</html>

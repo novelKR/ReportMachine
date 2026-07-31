@@ -8,6 +8,7 @@ from typing import Sequence
 
 from .codex_exec import make_path_snapshot, run_command, validate_path_snapshot
 from .config import RunnerProfile, SummaryProfile, load_profile_config, resolve_config_path
+from .execution_control import run_with_execution_control
 from .paths import as_posix_arg, find_project_root, resolve_under_root, validate_run_id
 from .summary_contracts import (
     SUMMARY_SCHEMA,
@@ -183,10 +184,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             web_search=args.web_search,
             profile=loaded_profile.summary,
         )
-        return run_summary_workflow(
-            config,
-            dry_run=args.dry_run,
-            smoke_test=args.smoke_test,
+        if args.dry_run or args.smoke_test:
+            return run_summary_workflow(
+                config,
+                dry_run=args.dry_run,
+                smoke_test=args.smoke_test,
+            )
+        return run_with_execution_control(
+            root,
+            lambda: run_summary_workflow(config),
+            operation="summary",
+            run_id=args.run_id,
         )
     except ValueError as exc:
         parser.error(str(exc))

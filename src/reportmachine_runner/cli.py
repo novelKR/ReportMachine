@@ -1,9 +1,20 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from pathlib import Path
 from typing import Sequence
 
+from .execution_control import (
+    ExecutionControlFailure,
+    RECOVERY_REQUIRED_EXIT_CODE,
+    acknowledge_recovery_fence,
+    read_owner_record,
+    run_with_execution_control,
+)
+from .paths import find_project_root
 from .phase_contracts import ANALYSIS_MODES, DEPTH_CHOICES, PHASE_CHOICES
+from .run_context import build_run_context
 from .workflow import run_article_workflow
 
 
@@ -31,6 +42,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", default="default", help="Profile name under [profiles.<name>] in the TOML preset.")
     parser.add_argument("--run-id", help="Run id used for work/runs/{run_id} and outputs/{run_id}. Defaults to current UTC timestamp.")
     parser.add_argument("--project-root", help="ReportMachine project root. Defaults to REPORTMACHINE_ROOT or marker search from cwd.")
+    parser.add_argument(
+        "--acknowledge-execution-recovery",
+        metavar="LEASE_ID",
+        help=(
+            "Standalone recovery acknowledgement for an unclean execution owner fence. "
+            "Requires the exact lease_id shown by status; it never retries the workflow."
+        ),
+    )
     parser.add_argument("--topic")
     parser.add_argument("--sources")
     parser.add_argument("--schema")
@@ -126,6 +145,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Record user approval of the normalized scope so drafting phases may run unattended.",
     )
     parser.add_argument(
+        "--intake-approve-scope-only",
+        action="store_true",
+        help=(
+            "Atomically approve an existing validated intent contract without source "
+            "ingest, preflight, or model execution. Requires explicit --run-id, --mode, "
+            "and --intake-approve-scope-sha256."
+        ),
+    )
+    parser.add_argument(
+        "--intake-approve-scope-sha256",
+        help="Expected SHA-256 fingerprint of the current material scope delta.",
+    )
+    parser.add_argument(
         "--intake-reset-intent-contract",
         action="store_true",
         help=(
@@ -188,4 +220,74 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return run_article_workflow(parser, args)
+    if args.acknowledge_execution_recovery is not None:
+        defaults = parser.parse_args([])
+        allowed = {"project_root", "acknowledge_execution_recovery"}
+        conflicting = [
+            name
+            for name, value in vars(args).items()
+            if name not in allowed and value != getattr(defaults, name)
+        ]
+        if conflicting:
+            parser.error(
+                "--acknowledge-execution-recovery must be used alone except for --project-root"
+            )
+        root = (
+            Path(args.project_root).expanduser().resolve()
+            if args.project_root
+            else find_project_root()
+        )
+        try:
+            owner = read_owner_record(root)
+            if owner is not None:
+                run_id = owner.get("run_id")
+                if not isinstance(run_id, str) or not run_id:
+                    raise ExecutionControlFailure(
+                        RECOVERY_REQUIRED_EXIT_CODE,
+                        "recovery_required: owner run_id is unavailable for artifact/provenance inspection",
+                    )
+                from .web.status import StatusReader
+                from .web.supervisor import OwnerStateAdapter
+
+                inspected = StatusReader(
+                    root,
+                    owner_adapter=OwnerStateAdapter(root),
+                ).read(run_id)
+                if inspected.article.get("state") == "not_checked":
+                    raise ExecutionControlFailure(
+                        RECOVERY_REQUIRED_EXIT_CODE,
+                        "recovery_required: artifact/provenance state was not stable enough to inspect",
+                    )
+                print("execution_recovery_article_state:", inspected.article.get("state"))
+        except ExecutionControlFailure as exc:
+            print(str(exc), file=sys.stderr)
+            return exc.exit_code
+        try:
+            removed = acknowledge_recovery_fence(
+                root,
+                expected_lease_id=args.acknowledge_execution_recovery,
+            )
+        except ExecutionControlFailure as exc:
+            print(str(exc), file=sys.stderr)
+            return exc.exit_code
+        print(
+            "execution_recovery: fence acknowledged"
+            if removed
+            else "execution_recovery: no owner fence remains"
+        )
+        return 0
+    if args.dry_run or args.smoke_test:
+        return run_article_workflow(parser, args)
+
+    # Resolve the complete context exactly once before creating the owner record. In
+    # particular, an omitted --run-id must not leave a crash fence with run_id=null while
+    # the callback later invents a different automatic id that recovery cannot inspect.
+    context = build_run_context(parser, args)
+    operation = "scope_approval" if args.intake_approve_scope_only else "article"
+    return run_with_execution_control(
+        context.root,
+        lambda: run_article_workflow(parser, args, context=context),
+        operation=operation,
+        run_id=context.run_id,
+        mode=context.mode,
+    )

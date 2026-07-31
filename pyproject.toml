@@ -12,6 +12,7 @@ authors = [{ name = "ReportMachine" }]
 dependencies = ["jsonschema>=4.0", 'tomli>=2; python_version < "3.11"']
 
 [project.optional-dependencies]
+web = ["Flask>=3.1,<4", "waitress>=3,<4"]
 publish = ["reportlab>=4.0"]
 build = ["pyinstaller>=6.0", "Pillow>=10.1.0"]
 dev = ["pyinstaller>=6.0", "Pillow>=10.1.0"]
@@ -21,3 +22,6 @@ reportmachine-runner = "reportmachine_runner.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+reportmachine_runner = ["web/templates/*.html", "web/static/*.js", "web/static/*.css"]

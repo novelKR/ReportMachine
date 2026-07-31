@@ -38,6 +38,7 @@ class PackageSourceTests(unittest.TestCase):
         for rel in [
             "scripts/package_source.py",
             "scripts/layout_contract.py",
+            "scripts/run_web.py",
             "scripts/run_publish.py",
             "tests/test_package_source.py",
             "schemas/preflight_result.schema.json",
@@ -46,6 +47,7 @@ class PackageSourceTests(unittest.TestCase):
             "schemas/qa_report.schema.json",
             "schemas/image_audit_report.schema.json",
             "src/reportmachine_runner/audit.py",
+            "src/reportmachine_runner/execution_control.py",
             "src/reportmachine_runner/manifest.py",
             "src/reportmachine_runner/pdf_processing.py",
             "src/reportmachine_runner/preflight.py",
@@ -66,6 +68,18 @@ class PackageSourceTests(unittest.TestCase):
             "src/reportmachine_runner/summary_validation.py",
             "src/reportmachine_runner/summary_workflow.py",
             "src/reportmachine_runner/workflow.py",
+            "src/reportmachine_runner/web/__init__.py",
+            "src/reportmachine_runner/web/_launch_gate.py",
+            "src/reportmachine_runner/web/app.py",
+            "src/reportmachine_runner/web/artifacts.py",
+            "src/reportmachine_runner/web/contracts.py",
+            "src/reportmachine_runner/web/security.py",
+            "src/reportmachine_runner/web/state.py",
+            "src/reportmachine_runner/web/status.py",
+            "src/reportmachine_runner/web/supervisor.py",
+            "src/reportmachine_runner/web/templates/index.html",
+            "src/reportmachine_runner/web/static/app.js",
+            "src/reportmachine_runner/web/static/app.css",
         ]:
             if (PROJECT_ROOT / rel).exists():
                 rels.add(rel)

@@ -130,6 +130,13 @@ class CliHarness(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(redirect_stdout(stdout))
             stack.enter_context(redirect_stderr(stderr))
+            state_temp = stack.enter_context(tempfile.TemporaryDirectory())
+            stack.enter_context(
+                patch(
+                    "reportmachine_runner.execution_control.default_state_root",
+                    return_value=Path(state_temp) / "state",
+                )
+            )
             if (
                 self.bypass_schema_dependency_gate
                 and importlib.util.find_spec("jsonschema") is None

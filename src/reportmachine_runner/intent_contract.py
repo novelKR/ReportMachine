@@ -8,6 +8,9 @@ defect that let a market-reaction question become a fundamentals-only article.
 from __future__ import annotations
 
 import json
+import os
+import stat
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -79,6 +82,15 @@ class ScopeGateResult:
     messages: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class ScopeApprovalCASResult:
+    """Result of binding an approval to one exact current scope fingerprint."""
+
+    payload: dict[str, Any]
+    changed: bool
+    errors: tuple[str, ...] = ()
+
+
 def default_analysis_modes(mode: str) -> list[str]:
     if mode == "earnings":
         return ["earnings_quality", "company_fundamental"]
@@ -129,13 +141,65 @@ def build_intent_contract(
     }
 
 
+def _replace_intent_contract_bytes(target: Path, data: bytes) -> None:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target_mode = 0o644
+    try:
+        current_mode = target.lstat().st_mode
+        if stat.S_ISREG(current_mode):
+            target_mode = stat.S_IMODE(current_mode)
+    except FileNotFoundError:
+        pass
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, target_mode)
+        else:  # pragma: no cover - Windows compatibility branch
+            os.chmod(temporary, target_mode)
+        handle = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        if os.name == "posix":
+            flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+            directory_descriptor = os.open(target.parent, flags)
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def write_intent_contract(root: Path, rel: str, payload: dict[str, Any]) -> None:
     target = resolve_under_root(root, rel)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
+    serialized = (
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    ).encode("utf-8")
+    _replace_intent_contract_bytes(target, serialized)
+
+
+def restore_intent_contract_bytes(root: Path, rel: str, data: bytes) -> None:
+    """Atomically restore the exact bytes captured before a runner-owned rewrite."""
+
+    # Validate encoding before creating a replacement file. Intent contracts are UTF-8
+    # JSON, and restoring undecodable bytes would only turn a catchable mutation failure
+    # into a malformed canonical artifact.
+    data.decode("utf-8")
+    _replace_intent_contract_bytes(resolve_under_root(root, rel), data)
 
 
 def write_original_request(root: Path, rel: str, text: str | None) -> None:
@@ -211,6 +275,63 @@ def apply_scope_approval(payload: dict[str, Any], *, approved: bool) -> dict[str
     # Bind the approval to the delta it approved so a later material change re-blocks.
     updated["approved_scope_delta_sha256"] = scope_delta_fingerprint(payload)
     return updated
+
+
+def apply_scope_approval_cas(
+    payload: dict[str, Any],
+    *,
+    expected_run_id: str,
+    expected_mode: str,
+    expected_scope_sha256: str,
+) -> ScopeApprovalCASResult:
+    """Approve only the exact validated contract state the caller observed.
+
+    Every comparison happens before a replacement payload is created.  A stale
+    fingerprint, wrong run or mode, or conflicting scope therefore leaves the
+    caller with the original object and no write to perform.
+    """
+
+    actual_run_id = str(payload.get("run_id") or "").strip()
+    if actual_run_id != expected_run_id:
+        return ScopeApprovalCASResult(
+            payload=payload,
+            changed=False,
+            errors=(
+                "intent contract run_id mismatch: "
+                f"expected {expected_run_id}, found {actual_run_id or 'missing'}",
+            ),
+        )
+    actual_mode = str(payload.get("article_type") or "").strip()
+    if actual_mode != expected_mode:
+        return ScopeApprovalCASResult(
+            payload=payload,
+            changed=False,
+            errors=(
+                "intent contract article_type mismatch: "
+                f"expected {expected_mode}, found {actual_mode or 'missing'}",
+            ),
+        )
+    if payload.get("scope_status") == "conflicting":
+        return ScopeApprovalCASResult(
+            payload=payload,
+            changed=False,
+            errors=("scope_status is `conflicting`; scope approval cannot override it",),
+        )
+    current_scope_sha256 = scope_delta_fingerprint(payload)
+    if expected_scope_sha256.lower() != current_scope_sha256:
+        return ScopeApprovalCASResult(
+            payload=payload,
+            changed=False,
+            errors=(
+                "material scope fingerprint mismatch: "
+                f"expected {expected_scope_sha256.lower()}, current {current_scope_sha256}",
+            ),
+        )
+    recorded = str(payload.get("approved_scope_delta_sha256") or "").strip().lower()
+    if payload.get("approval_status") == "approved" and recorded == current_scope_sha256:
+        return ScopeApprovalCASResult(payload=payload, changed=False)
+    updated = apply_scope_approval(payload, approved=True)
+    return ScopeApprovalCASResult(payload=updated, changed=updated is not payload)
 
 
 def evaluate_scope_gate(payload: dict[str, Any]) -> ScopeGateResult:

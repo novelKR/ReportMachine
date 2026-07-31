@@ -30,7 +30,15 @@ class SummaryWorkflowTests(unittest.TestCase):
     def run_summary_cli(self, argv: list[str]) -> tuple[int, str]:
         stdout = io.StringIO()
         stderr = io.StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with (
+            tempfile.TemporaryDirectory() as state_temp,
+            patch(
+                "reportmachine_runner.execution_control.default_state_root",
+                return_value=Path(state_temp) / "state",
+            ),
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
             try:
                 status = summary_main(argv)
             except SystemExit as exc:

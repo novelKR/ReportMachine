@@ -197,7 +197,7 @@ Pipeline role 실행은 POSIX host만 지원합니다. 각 role은 독립 sessio
 
 `outputs/latest`는 role 쓰기 범위가 아닙니다. 호출 전 root는 absent 또는 symlink가 아닌 실제 directory여야 하며, root 자체가 symlink, regular file, special file이면 복원을 시도할 대상이 아니라 호출 전 hard failure입니다. 실제 directory인 경우 러너는 내부 entry set과 type, regular-file bytes, symlink target text를 보존하고 symlink를 따라가지 않습니다. Catchable role failure, exact-allowlist 위반, latest drift가 생기면 cleanup에서 기존 absent/tree 상태로 복원하고 다시 검증합니다. 복원 또는 재검증 실패는 status 2이며 checkpoint, final export, audit 성공, latest 승격을 모두 금지합니다.
 
-이 경계는 단일 runner, 실행 중 산출물을 읽는 동시 reader 없음, catchable process 종료를 전제로 한 사후 검출 장치입니다. `outputs/latest` 외 상위 파일의 전체 rollback, real repo 밖 atomic staging, multi-file commit journal, `kill -9`·host crash recovery, same-run locking, 적대적 role의 repo 밖 쓰기·network·secret 격리는 제공하지 않습니다.
+이 role 경계는 통제되지 않은 동시 reader가 없고 process 종료가 catchable하다는 전제의 사후 검출 장치입니다. 지원되는 top-level 변경 실행은 아래 localhost Web 절에서 설명하는 checkout 단위 OS lock을 공통으로 사용합니다. Web 상태·산출물 조회는 writer lock을 선점하지 않고 active owner를 차단한 뒤 owner·receipt·산출물의 이중 관찰이 동일할 때만 안정된 결과를 반환합니다. 다만 role 경계 자체는 `outputs/latest` 외 상위 파일의 전체 rollback, real repo 밖 atomic staging, multi-file commit journal, `kill -9`·host crash 복구, 적대적 role의 repo 밖 쓰기·network·secret 격리를 제공하지 않습니다.
 
 ### 의도 고정과 범위 승인
 
@@ -310,6 +310,105 @@ python3 scripts/run_article.py --mode industry --phase audit --run-id ai_power_g
 ```
 
 이 면제는 provenance를 소급 생성하지 않으며, 성공해도 `outputs/latest/`를 갱신하지 않습니다. marker나 checkpoint 파일이 하나라도 생긴 런에는 사용할 수 없습니다.
+
+## 5.1 localhost Web MVP
+
+같은 기사 러너를 브라우저에서 제한적으로 제어하려면 선택 의존성을 설치하고 로컬 서버를 실행합니다.
+
+```bash
+python3 -m pip install -e ".[web]"
+python3 scripts/run_web.py
+```
+
+서버는 정확히 `127.0.0.1`에만 bind하며 기본 주소는 `http://127.0.0.1:8765/`입니다. `localhost`나 `0.0.0.0`로 바꿀 수 없고, 포트만 `python3 scripts/run_web.py --port <port>`로 바꿀 수 있습니다. 터미널에 표시된 one-time bootstrap capability를 페이지에 한 번 입력하면 process memory 안의 session과 CSRF token이 생성됩니다. 서버를 재시작하면 session도 사라지고 새 capability가 발급됩니다.
+
+Web이 허용하는 명령은 아래 고정 집합뿐입니다. 아래 여섯 executable action은 모두 명시적인 mode(`industry|earnings|preview`)와 validated `run_id`가 필요합니다.
+
+| Web 작업 | 실제 동작과 제한 |
+|---|---|
+| `smoke` | topic을 선택적으로 받아 `--smoke-test` 실행 |
+| `prepare` | topic을 선택적으로 받아 App fallback manifest까지 만드는 `--prepare-only` 실행 |
+| `approve_scope` | status에서 읽은 현재 material-scope SHA-256으로 기존 validated intent contract를 CAS 승인; source ingest, preflight, model 실행 없음 |
+| `run_all` | topic을 선택적으로 받아 `--phase all` 실행 |
+| `allowed_phase` | `scope`, `research-plan`, `research`, `evidence`, `narrative`, `draft`, `review`, `revise`, `finalize` 중 하나만 실행 |
+| `audit` | 별도 `--phase audit` 실행; provenance waiver는 Web에서 허용하지 않음 |
+| status / log | 실행 receipt, writer 상태, 현재 기사 검증 상태와 redacted Web supervisor log 조회 |
+| cancel | 현재 Web supervisor가 소유한 `running` 실행에만 top-level `SIGTERM` 요청 |
+| recovery | process와 owner 상태를 다시 확인한 뒤 모호한 종료를 명시적으로 승인; workflow 재실행 없음 |
+| artifact | 고정된 logical artifact만 다운로드 |
+
+`approve_scope`는 화면에 표시된 `current_scope_sha256`과 현재 파일을 다시 비교합니다. Stale hash, 다른 `run_id`·mode, invalid contract, `scope_status=conflicting`이면 파일을 바꾸지 않고 실패합니다. 같은 현재 범위를 이미 승인했다면 모든 기존 provenance checkpoint가 현재 intent hash와 일치할 때만 파일을 교체하지 않는 idempotent 성공입니다. 승인 중 checkpoint 갱신이 실패하면 intent와 checkpoint를 원래 바이트로 되돌리고, rollback까지 검증할 수 없는 경우에는 exit `76` recovery fence를 남깁니다. CLI의 대응 명령은 다음과 같습니다.
+
+Receipt와 화면은 서버가 해석한 요청 phase를 별도로 표시합니다. 현재 receipt와 같은 요청을 여러 탭이나 재클릭으로 보내면 그 receipt를 재사용합니다. 이후 다른 작업이 실행돼도 `receipt.json` 안의 최근 32건 accepted-request index가 동일 idempotency key·payload와 같은 run/action의 무확인 재실행을 막습니다. 이 historical duplicate는 새 process 없이 충돌로 응답하며, 정말 새 execution으로 다시 실행할 때는 새 idempotency key와 화면의 명시적 재실행 확인을 함께 사용합니다. 이 구분은 Web 전용 phase state machine이 아니며 실제 완료 여부는 기존 runner log, provenance와 artifact 검증이 판단합니다.
+
+```bash
+python3 scripts/run_article.py --mode <mode> --run-id <run_id> \
+  --intake-approve-scope-only \
+  --intake-approve-scope-sha256 <current_scope_sha256>
+```
+
+브라우저는 실행 파일, argv, project root, config/profile, 임의 입력·출력 경로, source 목록, network/web-search flag, proxy, shell, environment를 받지 않습니다. Topic text도 `smoke`, `prepare`, `run_all`에만 허용하고 파일 upload는 제공하지 않습니다. 서버가 고정 argv를 만들고 `shell=False`로 현재 checkout의 `scripts/run_article.py`만 실행합니다.
+
+### 단일 writer, 취소, 복구
+
+Web이 시작한 child와 직접 실행한 CLI는 canonical checkout 하나를 key로 하는 공통 non-blocking OS writer lock을 사용합니다. 따라서 `run_id`가 달라도 article/prepare/범위 승인/단계/audit과 standalone summary·publish 변경 실행은 동시에 진행되지 않습니다. CLI가 `--run-id`를 생략해도 lock owner를 쓰기 전에 자동 ID를 한 번만 확정해 owner와 workflow가 같은 run을 가리킵니다. `--smoke-test`와 `--dry-run`은 파일을 변경하지 않으므로 lock을 잡지 않습니다. Web status와 artifact 조회는 이 writer lock을 잡지 않습니다. 대신 active receipt/owner가 있으면 기사 상태를 `not_checked`로 남기거나 조회를 거부하고, 그 외에도 owner와 receipt를 전후 비교하고 같은 artifact를 두 번 읽은 결과가 같을 때만 반환합니다. 따라서 polling reader가 막 시작한 non-blocking writer를 exit `75`로 실패시키지 않습니다.
+
+- Exit `75`: 다른 변경 실행이 현재 lock을 소유하는 `busy` 상태입니다. 자동 대기나 queueing을 하지 않습니다.
+- Exit `76`: OS lock은 비었지만 이전 `owner.json`이 남은 `recovery_required` 상태입니다. 자동 재시도하지 않습니다.
+
+Web operation receipt 상태는 `queued`, `running`, `cancelling`, `exited`, `cancelled`, `interrupted_unknown`, `recovery_required`, `recovered`입니다. 정상 process 종료는 `exited`일 뿐 기사 성공을 뜻하지 않습니다. Web child는 POSIX pipe start barrier에서 기다리고, supervisor가 PID와 process birth identity가 포함된 `running` receipt를 원자적으로 기록한 뒤 정확한 permit을 보낸 경우에만 기존 runner로 진입합니다. 그 전 supervisor crash, birth 확인 실패, receipt 기록 실패는 pipe EOF로 runner 진입을 거부합니다. 취소는 `running -> cancelling`으로 시작하고, exit `143`, process 종료, 해당 Web execution에 결박된 owner fence 부재가 함께 확인된 경우에만 `cancelled`가 됩니다. 취소 신호가 적용되기 전에 child가 자연스럽게 exit `0`으로 끝났고 process death와 owner 판독 성공이 확인되며 자기 owner fence가 없으면 `exited`/`0`을 보존합니다. 이때 다른 직접 CLI owner가 있으면 Web child의 fence로 오인하지 않고 independent writer로만 표시합니다. Process가 살아 있을 수 있으면 `interrupted_unknown`, process는 끝났지만 자기 fence가 남거나 owner 판독 또는 spawn/settlement가 모호하면 `recovery_required`로 남습니다. Web server가 중간에 재시작돼도 작업을 다시 시작하지 않으며 같은 보수적 상태로 복구합니다.
+
+Web의 recovery 버튼은 기록된 process가 더 이상 live가 아니고 core owner가 해당 Web execution id·PID·lease에 결박되며 안정된 artifact/provenance 이중 검사가 끝났을 때만 동작합니다. Owner 제거와 `recovered` receipt 기록은 같은 OS-lock 임계 구간에서 마감되며 receipt 기록이 실패하면 fence를 복원합니다. 승인 뒤에도 workflow와 repository artifact는 재실행·수정하지 않습니다. Web 소유가 아닌 fence는 Web이 제거하지 않고 CLI recovery를 안내합니다. Web을 쓸 수 없을 때 core owner fence만 승인하는 CLI fallback은 다음과 같습니다.
+
+```bash
+python3 scripts/run_article.py --acknowledge-execution-recovery <lease_id>
+```
+
+이 옵션은 선택적 `--project-root` 외 다른 옵션과 함께 쓸 수 없습니다. 실제 OS lock을 먼저 잡은 뒤 현재 lease를 compare-and-swap 방식으로 확인합니다. Active writer면 exit `75`, lease가 바뀌었거나 recovery 상태를 안전하게 판정할 수 없으면 exit `76`입니다. 이 CLI 명령은 core fence만 제거하므로 Web receipt가 `recovery_required` 또는 `interrupted_unknown`이면 Web을 다시 열어 별도의 recovery 승인도 완료해야 합니다. 어느 경로도 중단된 workflow를 자동 재시도하지 않습니다.
+
+공통 상태는 repository 밖의 다음 위치에 있습니다.
+
+```text
+~/.reportmachine/state/checkouts/{checkout_sha256}/writer.lock
+~/.reportmachine/state/checkouts/{checkout_sha256}/owner.json
+~/.reportmachine/state/checkouts/{checkout_sha256}/web/receipt.json
+~/.reportmachine/state/checkouts/{checkout_sha256}/web/web.log
+```
+
+POSIX의 `checkout_sha256`은 checkout directory의 filesystem device/inode identity를 hash하므로 같은 physical checkout을 가리키는 지원 path·case alias가 하나의 lock에 경합합니다. 해당 identity를 사용할 수 없는 플랫폼에서는 platform-normalized canonical path를 사용합니다. Production entrypoint는 이 per-OS-user state root의 환경변수 override를 허용하지 않습니다. 실행 환경마다 root가 달라져 공통 lock이 분리되는 것을 막기 위해서입니다. POSIX에서는 state directory를 `0700`, lock/owner/receipt/log 파일을 `0600`으로 유지합니다. Windows용 `msvcrt` core lock 분기는 구현되어 있지만 현재 검증에서는 직접 실행하지 않았습니다. Web runner start barrier와 model role 실행은 POSIX host만 지원합니다.
+
+### 상태 판정과 보안 경계
+
+Web status는 process receipt와 기사 유효성을 별도로 표시합니다. Exit `0`도 현재 `article.md`와 `article_result.json` hash, JSON schema, preflight, audit/run summary가 일치해야 하고, runner의 기존 `validate_checkpoint()`로 finalize가 보호하는 전체 artifact와 ledger row를 현재 상태에서 다시 검증해야 합니다. 또한 final-sync report가 기록한 전체 frozen-output hash 집합이 현재 파일과 정확히 같아야만 유효한 기사로 판정됩니다. 반대로 `cancelled`나 `recovered`는 operation 정리 상태이지 artifact가 유효하거나 무효라는 결론이 아닙니다. 실행 전에 존재하던 stale 파일을 새 성공 산출물로 오인하지 않도록 시작 전후 authoritative evidence hash도 따로 기록합니다.
+
+Artifact broker는 `outputs/{run_id}/` 아래의 다음 logical name만 허용합니다.
+
+```text
+article, article_result, source_ledger, image_ledger, claim_ledger,
+preflight, run_manifest, final_sync, paragraph_map, research_appendix,
+publish_pdf, publish_result, summary_image, summary_result
+```
+
+브라우저가 임의 path를 보낼 수 없고, reserved `latest`, path traversal, symlink가 포함된 경로, directory·special file은 거부됩니다. 다운로드 가능 여부는 파일 접근 안전성을 뜻할 뿐 기사 publishability를 대신 판정하지 않습니다.
+
+모든 요청은 포트를 포함한 exact `Host`를 검사합니다. POST는 같은 exact `Origin` 또는 Referer와 session CSRF token까지 필요합니다. Bootstrap 뒤 cookie는 `HttpOnly`, `SameSite=Strict`이고 CORS header는 내보내지 않습니다. Launcher 환경은 빈 dict에서 시작해 controlled `PATH`, 서버가 생성한 비밀이 아닌 correlation 값 `REPORTMACHINE_WEB_EXECUTION_ID`, 상속된 start-barrier descriptor, 아래 allowlist만 전달합니다. Launcher는 permit 확인 뒤 descriptor 환경값을 제거하고 기존 runner로 교체됩니다.
+
+```text
+HOME, CODEX_HOME, TMPDIR, TMP, TEMP, LANG, LC_ALL, LC_CTYPE,
+SSL_CERT_FILE, SSL_CERT_DIR, REQUESTS_CA_BUNDLE, CURL_CA_BUNDLE
+```
+
+Ambient proxy와 인증·credential 환경 변수는 상속하지 않습니다. 화면의 log는 `web/web.log` 마지막 부분만 읽으며 terminal control과 알려진 Bearer/Basic, API key, token, JWT, password/cookie류 패턴을 redaction합니다. 원시 Codex event log를 제공하지 않으며, 이 redaction은 알려진 공통 형식에 대한 실용적 방어선이지 앞으로 생길 모든 secret 형식을 탐지한다는 보장은 아닙니다.
+
+Web 밖 작업은 기존 CLI를 그대로 사용합니다. 예를 들어 historical/App-native run의 provenance waiver, TOML profile, custom source ingest/network 옵션은 CLI 전용입니다.
+
+```bash
+python3 scripts/run_article.py --mode industry --run-id <run_id> --phase all
+python3 scripts/run_article.py --mode industry --run-id <run_id> --phase audit \
+  --allow-unprovenanced-audit
+```
+
+이 MVP의 명시적 비범위는 LAN bind, multi-user 인증/권한, database, durable queue, SPA, SSE, WebSocket, file upload, remote executor입니다. 한 로컬 사용자·한 checkout을 위한 server-rendered HTML과 polling UI입니다.
 
 ## 6. 산출물 경로
 

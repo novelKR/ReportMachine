@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Sequence
 
 from .config import PublishProfile, RunnerProfile, load_profile_config, resolve_config_path
+from .execution_control import run_with_execution_control
 from .paths import as_posix_arg, find_project_root, resolve_under_root, validate_run_id
 from .publish_contracts import (
     PUBLISH_SCHEMA,
@@ -486,11 +487,21 @@ def main(argv: Sequence[str] | None = None) -> int:
             schema=args.schema,
             profile=publish_profile,
         )
-        return run_publish_workflow(
-            config,
-            dry_run=args.dry_run,
-            smoke_test=args.smoke_test,
-            mirror_latest=not args.no_mirror_latest,
+        if args.dry_run or args.smoke_test:
+            return run_publish_workflow(
+                config,
+                dry_run=args.dry_run,
+                smoke_test=args.smoke_test,
+                mirror_latest=not args.no_mirror_latest,
+            )
+        return run_with_execution_control(
+            root,
+            lambda: run_publish_workflow(
+                config,
+                mirror_latest=not args.no_mirror_latest,
+            ),
+            operation="publish",
+            run_id=args.run_id,
         )
     except ValueError as exc:
         parser.error(str(exc))

@@ -1082,6 +1082,7 @@ def _check_paragraph_map(paragraph_map: Any, article: str, digest: str | None) -
 
 def _artifact_hashes(root: Path, artifacts: RunArtifacts) -> dict[str, str | None]:
     targets = {
+        "article_result_json": artifacts.article_result,
         "article_md": artifacts.article,
         "claim_ledger_json": artifacts.claim_ledger,
         "source_ledger_csv": artifacts.source_ledger,
@@ -1097,6 +1098,19 @@ def _artifact_hashes(root: Path, artifacts: RunArtifacts) -> dict[str, str | Non
         except ValueError:
             hashes[key] = None
     return hashes
+
+
+def final_sync_artifact_hashes(
+    root: Path,
+    artifacts: RunArtifacts,
+) -> dict[str, str | None]:
+    """Return the current hash set protected by a final-sync report.
+
+    Read-only status surfaces use this same runner-owned mapping instead of duplicating the
+    audit's definition of which frozen outputs must still match the recorded report.
+    """
+
+    return _artifact_hashes(root, artifacts)
 
 
 def _regenerated_after_freeze(root: Path, artifacts: RunArtifacts) -> bool:

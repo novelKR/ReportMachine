@@ -1,0 +1,12 @@
+body { background: #f6f7f9; color: #1d2433; font: 16px/1.5 system-ui, sans-serif; margin: 0; }
+main { margin: 2rem auto; max-width: 56rem; padding: 0 1rem; }
+section, form { background: #fff; border: 1px solid #d6dae1; border-radius: .5rem; margin: 1rem 0; padding: 1rem; }
+.notice { background: #fff8db; border-left: .3rem solid #d29b00; padding: .75rem; }
+label { display: block; margin: .65rem 0; }
+input, textarea, select, button { font: inherit; max-width: 100%; padding: .35rem; }
+textarea { display: block; min-height: 5rem; width: 100%; }
+pre { max-height: 22rem; overflow: auto; white-space: pre-wrap; }
+dl { display: grid; grid-template-columns: minmax(9rem, 1fr) 3fr; gap: .35rem .75rem; }
+dt { font-weight: 650; }
+dd { margin: 0; overflow-wrap: anywhere; }
+nav { display: flex; flex-wrap: wrap; gap: .5rem 1rem; }

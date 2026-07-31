@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -67,6 +68,8 @@ class RunContext:
     run_artifacts: RunArtifacts
     original_request: str | None
     approve_scope: bool
+    approve_scope_only: bool
+    approve_scope_sha256: str | None
     depth: str
     analysis_modes: tuple[str, ...]
     waived_blocked_sources: tuple[str, ...]
@@ -224,6 +227,43 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
     )
     if allow_unprovenanced_audit and phase != "audit":
         parser.error("--allow-unprovenanced-audit requires --phase audit")
+    approve_scope_only = bool(getattr(args, "intake_approve_scope_only", False))
+    approve_scope_sha256_value = getattr(
+        args,
+        "intake_approve_scope_sha256",
+        None,
+    )
+    if approve_scope_only:
+        if not args.run_id:
+            parser.error("--intake-approve-scope-only requires explicit --run-id")
+        if not args.mode:
+            parser.error("--intake-approve-scope-only requires explicit --mode")
+        if getattr(args, "intake_approve_scope", False):
+            parser.error(
+                "--intake-approve-scope-only cannot be combined with --intake-approve-scope"
+            )
+        if not approve_scope_sha256_value or not re.fullmatch(
+            r"[0-9a-fA-F]{64}",
+            approve_scope_sha256_value,
+        ):
+            parser.error(
+                "--intake-approve-scope-only requires "
+                "--intake-approve-scope-sha256 as exactly 64 hexadecimal characters"
+            )
+        if args.dry_run or args.smoke_test or args.prepare_only:
+            parser.error(
+                "--intake-approve-scope-only cannot be combined with --dry-run, "
+                "--smoke-test, or --prepare-only"
+            )
+        if getattr(args, "intake_reset_intent_contract", False):
+            parser.error(
+                "--intake-approve-scope-only cannot be combined with "
+                "--intake-reset-intent-contract"
+            )
+    elif approve_scope_sha256_value is not None:
+        parser.error(
+            "--intake-approve-scope-sha256 requires --intake-approve-scope-only"
+        )
     intake_brief = build_intake_brief(parser, args, mode)
 
     run_id_prefix = profile.run_id_prefix
@@ -381,6 +421,12 @@ def build_run_context(parser: argparse.ArgumentParser, args: argparse.Namespace)
         run_artifacts=run_artifacts,
         original_request=original_request,
         approve_scope=approve_scope,
+        approve_scope_only=approve_scope_only,
+        approve_scope_sha256=(
+            approve_scope_sha256_value.lower()
+            if approve_scope_sha256_value is not None
+            else None
+        ),
         depth=depth,
         analysis_modes=analysis_modes,
         waived_blocked_sources=waived_blocked_sources,

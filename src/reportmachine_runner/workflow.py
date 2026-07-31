@@ -28,12 +28,15 @@ from .codex_exec import (
     validate_file_snapshot,
 )
 from .final_sync import run_final_sync_audit, write_final_sync_report
+from .execution_control import RecoveryFenceRequired
 from .intake import write_intake_files
 from .intent_contract import (
+    apply_scope_approval_cas,
     build_intent_contract,
     migrate_intent_contract,
     read_intent_contract,
     read_intent_contract_unvalidated,
+    restore_intent_contract_bytes,
     write_intent_contract,
     write_original_request,
 )
@@ -55,6 +58,8 @@ from .phase_provenance import (
     rebind_runner_owned_artifact,
     read_checkpoint,
     rendered_images_available,
+    RunnerArtifactRebindRecoveryRequired,
+    runner_owned_artifact_hash_errors,
     validate_checkpoint,
     write_ingest_receipt,
 )
@@ -547,6 +552,10 @@ def _run_pipeline_phases(
         if context.artifact_sync.enabled and context.artifact_sync.preserve_cache_on_failure:
             try_snapshot_external_artifacts(context.artifact_sync, configs.artifact_paths)
         _write_summary_log(context, status=outcome.label, preflight_status="pass")
+        if outcome.recovery_required:
+            raise RecoveryFenceRequired(
+                "role process-group cleanup could not prove that all descendant writers stopped"
+            )
         return outcome.status
     for message in outcome.messages:
         print(message)
@@ -689,8 +698,16 @@ def _run_final_audit(context: RunContext, configs: RunConfigs) -> int:
     return 0
 
 
-def run_article_workflow(parser: argparse.ArgumentParser, args: argparse.Namespace) -> int:
-    context = build_run_context(parser, args)
+def run_article_workflow(
+    parser: argparse.ArgumentParser,
+    args: argparse.Namespace,
+    *,
+    context: RunContext | None = None,
+) -> int:
+    context = context or build_run_context(parser, args)
+    if context.approve_scope_only:
+        return _approve_scope_only(context)
+
     configs = build_run_configs(
         context,
         codex_bin=args.codex_bin,
@@ -759,6 +776,107 @@ def run_article_workflow(parser: argparse.ArgumentParser, args: argparse.Namespa
         return 0
 
     return _run_final_audit(context, configs)
+
+
+def _approve_scope_only(context: RunContext) -> int:
+    """CAS-approve one existing intent contract without running the workflow."""
+
+    artifacts = context.run_artifacts
+    payload, validation_errors = read_intent_contract(
+        context.root,
+        artifacts.intent_contract,
+    )
+    if payload is None or validation_errors:
+        print("Scope approval failed:", file=sys.stderr)
+        for error in validation_errors or (
+            f"missing intent contract: {artifacts.intent_contract}",
+        ):
+            print(f" - {error}", file=sys.stderr)
+        return 2
+
+    assert context.approve_scope_sha256 is not None
+    result = apply_scope_approval_cas(
+        payload,
+        expected_run_id=context.run_id,
+        expected_mode=context.mode,
+        expected_scope_sha256=context.approve_scope_sha256,
+    )
+    if result.errors:
+        print("Scope approval failed:", file=sys.stderr)
+        for error in result.errors:
+            print(f" - {error}", file=sys.stderr)
+        return 2
+    if not result.changed:
+        provenance = _provenance_context(context)
+        current_sha256 = artifact_sha256(provenance, artifacts.intent_contract)
+        consistency_errors = runner_owned_artifact_hash_errors(
+            provenance,
+            artifacts.intent_contract,
+            expected_sha256=current_sha256,
+        )
+        if consistency_errors:
+            print("Scope approval failed:", file=sys.stderr)
+            for error in consistency_errors:
+                print(f" - {error}", file=sys.stderr)
+            return 2
+        print("scope_approval: already approved for the current material scope")
+        print("run_id:", context.run_id)
+        return 0
+
+    try:
+        _write_and_rebind_intent_contract(
+            context,
+            result.payload,
+            require_all_matching=True,
+        )
+    except RecoveryFenceRequired:
+        raise
+    except BaseException as exc:
+        print(
+            f"Scope approval failed: intent/provenance update rolled back: {type(exc).__name__}",
+            file=sys.stderr,
+        )
+        return 2
+    print("scope_approval: approved current material scope")
+    print("run_id:", context.run_id)
+    print("intent_contract:", artifacts.intent_contract)
+    return 0
+
+
+def _write_and_rebind_intent_contract(
+    context: RunContext,
+    payload: dict[str, object],
+    *,
+    require_all_matching: bool = False,
+) -> None:
+    artifacts = context.run_artifacts
+    provenance = _provenance_context(context)
+    before_sha256 = artifact_sha256(provenance, artifacts.intent_contract)
+    target = resolve_under_root(context.root, artifacts.intent_contract)
+    original = target.read_bytes()
+    try:
+        write_intent_contract(context.root, artifacts.intent_contract, payload)
+        rebind_runner_owned_artifact(
+            provenance,
+            artifacts.intent_contract,
+            previous_sha256=before_sha256,
+            require_all_matching=require_all_matching,
+        )
+    except BaseException as exc:
+        try:
+            restore_intent_contract_bytes(
+                context.root,
+                artifacts.intent_contract,
+                original,
+            )
+        except BaseException as restore_exc:
+            raise RecoveryFenceRequired(
+                "intent/provenance update failed and the intent contract rollback failed: "
+                f"{type(restore_exc).__name__}"
+            ) from exc
+        if isinstance(exc, RunnerArtifactRebindRecoveryRequired):
+            raise RecoveryFenceRequired(str(exc)) from exc
+        raise
 
 
 def _new_intent_contract(context: RunContext, *, approved: bool) -> dict[str, object]:
@@ -881,18 +999,7 @@ def _prepare_intent_artifacts(context: RunContext) -> IntentPreparationResult:
 
             updated = apply_scope_approval(updated, approved=True)
         if updated is not existing:
-            provenance = _provenance_context(context)
-            # Capture the pre-rewrite bytes so the rebind can prove it is refreshing the
-            # state a phase actually completed with, not laundering an earlier edit.
-            before_sha256 = artifact_sha256(provenance, artifacts.intent_contract)
-            write_intent_contract(context.root, artifacts.intent_contract, updated)
-            # The runner just rewrote its own contract, so refresh that one recorded hash
-            # instead of letting a runner-owned normalization look like a post-hoc edit.
-            rebind_runner_owned_artifact(
-                provenance,
-                artifacts.intent_contract,
-                previous_sha256=before_sha256,
-            )
+            _write_and_rebind_intent_contract(context, updated)
         return IntentPreparationResult()
 
     write_original_request(context.root, artifacts.original_request, context.original_request)

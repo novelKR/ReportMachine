@@ -21,6 +21,7 @@ import csv
 import json
 import os
 import stat
+import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -56,6 +57,14 @@ RENDERED_LEDGER_ROW_KEY = "image_path"
 # unguarded. `fetched_at` is a wall-clock stamp; the remaining fields are either evidence
 # state a role reads or attribution the final ledgers must preserve.
 LEDGER_VOLATILE_FIELDS = frozenset({"fetched_at"})
+
+
+class RunnerArtifactRebindError(RuntimeError):
+    """A runner-owned artifact cannot be rebound without laundering provenance drift."""
+
+
+class RunnerArtifactRebindRecoveryRequired(RunnerArtifactRebindError):
+    """A failed checkpoint rebind could not restore every captured checkpoint."""
 
 
 @dataclass(frozen=True)
@@ -813,6 +822,7 @@ def rebind_runner_owned_artifact(
     rel: str,
     *,
     previous_sha256: str | None,
+    require_all_matching: bool = False,
 ) -> None:
     """Re-record one artifact the runner itself rewrote outside any phase.
 
@@ -834,26 +844,162 @@ def rebind_runner_owned_artifact(
         return
     if current is None or current == previous_sha256:
         return
+    plan = _runner_artifact_rebind_plan(
+        context,
+        rel,
+        expected_sha256=previous_sha256,
+        replacement_sha256=current,
+        require_all_matching=require_all_matching,
+    )
+    try:
+        for target, _original, replacement in plan:
+            _replace_checkpoint_bytes(target, replacement)
+    except BaseException as exc:
+        restore_errors: list[str] = []
+        for target, original, _replacement in plan:
+            try:
+                _replace_checkpoint_bytes(target, original)
+            except BaseException as restore_exc:
+                restore_errors.append(f"{target.name}: {type(restore_exc).__name__}")
+        if restore_errors:
+            raise RunnerArtifactRebindRecoveryRequired(
+                "checkpoint rebind failed and rollback was incomplete: "
+                + ", ".join(restore_errors)
+            ) from exc
+        raise
+
+
+def runner_owned_artifact_hash_errors(
+    context: ProvenanceContext,
+    rel: str,
+    *,
+    expected_sha256: str | None,
+) -> list[str]:
+    """Return fail-closed errors for existing checkpoints tracking one runner artifact."""
+
+    if not rel or expected_sha256 is None:
+        return []
+    try:
+        _runner_artifact_rebind_plan(
+            context,
+            rel,
+            expected_sha256=expected_sha256,
+            replacement_sha256=expected_sha256,
+            require_all_matching=True,
+        )
+    except RunnerArtifactRebindError as exc:
+        return [str(exc)]
+    return []
+
+
+def _runner_artifact_rebind_plan(
+    context: ProvenanceContext,
+    rel: str,
+    *,
+    expected_sha256: str,
+    replacement_sha256: str,
+    require_all_matching: bool,
+) -> list[tuple[Path, bytes, bytes]]:
+    plan: list[tuple[Path, bytes, bytes]] = []
     for phase in PROVENANCE_ORDER:
-        payload = read_checkpoint(context, phase)
-        if payload is None:
+        try:
+            target = resolve_under_root(
+                context.root,
+                checkpoint_rel(context.artifacts, phase),
+            )
+        except ValueError as exc:
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint path is unsafe: {exc}"
+            ) from exc
+        try:
+            mode = target.lstat().st_mode
+        except FileNotFoundError:
             continue
+        except OSError as exc:
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint is not inspectable: {exc}"
+            ) from exc
+        if not stat.S_ISREG(mode):
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint is not a regular file"
+            )
+        try:
+            original = target.read_bytes()
+            payload = json.loads(original.decode("utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint is unreadable: {type(exc).__name__}"
+            ) from exc
+        if not isinstance(payload, dict):
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint is not a JSON object"
+            )
         recorded = payload.get("artifact_hashes")
         if not isinstance(recorded, dict) or rel not in recorded:
-            continue
-        if recorded.get(rel) != previous_sha256:
-            # Either already up to date, or the recorded state does not match what the
-            # runner just rewrote. Neither case may be overwritten.
-            continue
-        recorded[rel] = current
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint does not track {rel}"
+            )
+        if recorded.get(rel) != expected_sha256:
+            if not require_all_matching:
+                continue
+            raise RunnerArtifactRebindError(
+                f"{phase} checkpoint records a different {rel} hash; use --phase all"
+            )
+        recorded[rel] = replacement_sha256
+        replacement = (
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        plan.append((target, original, replacement))
+    return plan
+
+
+def _replace_checkpoint_bytes(target: Path, data: bytes) -> None:
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{target.name}.",
+        suffix=".tmp",
+        dir=target.parent,
+    )
+    temporary = Path(temporary_name)
+    try:
         try:
-            target = resolve_under_root(context.root, checkpoint_rel(context.artifacts, phase))
-        except ValueError:
-            continue
-        target.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
+            mode = stat.S_IMODE(target.lstat().st_mode)
+        except FileNotFoundError:
+            mode = 0o644
+        if hasattr(os, "fchmod"):
+            os.fchmod(descriptor, mode)
+        handle = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, target)
+        if os.name == "posix":
+            directory_descriptor = os.open(
+                target.parent,
+                os.O_RDONLY | getattr(os, "O_DIRECTORY", 0),
+            )
+            try:
+                os.fsync(directory_descriptor)
+            finally:
+                os.close(directory_descriptor)
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
 
 
 def read_checkpoint(context: ProvenanceContext, phase: str) -> dict | None:
