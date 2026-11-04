@@ -9,6 +9,7 @@ description = "OS-neutral Codex runner for ReportMachine article workflows."
 requires-python = ">=3.10"
 readme = "AGENTS.md"
 authors = [{ name = "ReportMachine" }]
+license = { text = "Apache-2.0" }
 dependencies = ["jsonschema>=4.0", 'tomli>=2; python_version < "3.11"']
 
 [project.optional-dependencies]
